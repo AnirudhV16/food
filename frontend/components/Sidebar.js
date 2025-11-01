@@ -1,9 +1,20 @@
 // frontend/components/Sidebar.js
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Alert } from 'react-native';
+import { useAuth } from '../contexts/AuthContext';
 
-export default function Sidebar({ isOpen, onToggle, activeTab, onTabChange, darkMode, onThemeToggle, theme }) {
+export default function Sidebar({ 
+  isOpen, 
+  onToggle, 
+  activeTab, 
+  onTabChange, 
+  darkMode, 
+  onThemeToggle, 
+  theme,
+  user 
+}) {
   const slideAnim = React.useRef(new Animated.Value(isOpen ? 0 : -280)).current;
+  const { logout } = useAuth();
 
   React.useEffect(() => {
     Animated.timing(slideAnim, {
@@ -12,6 +23,34 @@ export default function Sidebar({ isOpen, onToggle, activeTab, onTabChange, dark
       useNativeDriver: true,
     }).start();
   }, [isOpen]);
+
+  const handleLogout = async () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            const result = await logout();
+            if (!result.success) {
+              Alert.alert('Error', 'Failed to logout');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // Get user initials for avatar
+  const getUserInitials = () => {
+    if (user?.email) {
+      return user.email.substring(0, 2).toUpperCase();
+    }
+    return 'U';
+  };
 
   return (
     <>
@@ -47,9 +86,11 @@ export default function Sidebar({ isOpen, onToggle, activeTab, onTabChange, dark
         {/* Profile Section */}
         <View style={styles.profile}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>JD</Text>
+            <Text style={styles.avatarText}>{getUserInitials()}</Text>
           </View>
-          <Text style={[styles.userName, { color: theme.text }]}>John Doe</Text>
+          <Text style={[styles.userName, { color: theme.text }]} numberOfLines={1}>
+            {user?.email || 'User'}
+          </Text>
         </View>
 
         {/* Theme Toggle */}
@@ -111,6 +152,19 @@ export default function Sidebar({ isOpen, onToggle, activeTab, onTabChange, dark
               { color: activeTab === 'rating' ? '#FFFFFF' : theme.text }
             ]}>
               Rating
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Logout Button */}
+        <View style={styles.bottomSection}>
+          <TouchableOpacity
+            style={[styles.logoutButton, { backgroundColor: darkMode ? '#374151' : '#F3F4F6' }]}
+            onPress={handleLogout}
+          >
+            <Text style={styles.logoutIcon}>🚪</Text>
+            <Text style={[styles.logoutText, { color: '#ef4444' }]}>
+              Logout
             </Text>
           </TouchableOpacity>
         </View>
@@ -189,8 +243,10 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   userName: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '600',
+    width: '100%',
+    textAlign: 'center',
   },
   themeButton: {
     flexDirection: 'row',
@@ -209,6 +265,7 @@ const styles = StyleSheet.create({
   },
   tabs: {
     gap: 8,
+    flex: 1,
   },
   tab: {
     flexDirection: 'row',
@@ -226,5 +283,22 @@ const styles = StyleSheet.create({
   tabText: {
     fontSize: 16,
     fontWeight: '500',
+  },
+  bottomSection: {
+    marginTop: 'auto',
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 8,
+    gap: 12,
+  },
+  logoutIcon: {
+    fontSize: 20,
+  },
+  logoutText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

@@ -1,18 +1,31 @@
-// frontend/components/ItemScreen.js (FIXED VERSION)
+// frontend/components/ItemScreen.js
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../services/firebase';
+import { useAuth } from '../contexts/AuthContext';
 import ItemCard from './ItemCard';
+import AddProductModal from './AddProductModal';
 
 export default function ItemScreen({ theme, darkMode }) {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
+  
+  const { user } = useAuth();
 
-  // Load products from Firestore
+  // Load products from Firestore (only user's products)
   useEffect(() => {
-    const unsubscribe = onSnapshot(
+    if (!user) return;
+
+    const q = query(
       collection(db, 'products'),
+      where('userId', '==', user.uid)
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
       (snapshot) => {
         const productList = snapshot.docs.map(doc => ({
           id: doc.id,
@@ -23,12 +36,39 @@ export default function ItemScreen({ theme, darkMode }) {
       },
       (error) => {
         console.error('Error loading products:', error);
+        Alert.alert('Error', 'Failed to load products. Check Firestore permissions.');
         setLoading(false);
       }
     );
 
     return () => unsubscribe();
-  }, []);
+  }, [user]);
+
+  // Save product (add or update)
+  const handleSaveProduct = async (productData) => {
+    try {
+      if (editingProduct) {
+        // Update existing product
+        await updateDoc(doc(db, 'products', editingProduct.id), {
+          ...productData,
+          userId: user.uid, // Ensure userId is always set
+        });
+        Alert.alert('Success', 'Product updated successfully!');
+      } else {
+        // Add new product
+        await addDoc(collection(db, 'products'), {
+          ...productData,
+          userId: user.uid, // Add userId for security rules
+        });
+        Alert.alert('Success', 'Product added successfully!');
+      }
+      setEditingProduct(null);
+    } catch (error) {
+      console.error('Error saving product:', error);
+      Alert.alert('Error', 'Failed to save product: ' + error.message);
+      throw error;
+    }
+  };
 
   // Delete product
   const handleDeleteProduct = (productId) => {
@@ -54,13 +94,16 @@ export default function ItemScreen({ theme, darkMode }) {
     );
   };
 
-  // For now, just show an alert for add/edit
+  // Open modal for adding new product
   const handleAddProduct = () => {
-    Alert.alert('Coming Soon', 'Add Product Modal will open here');
+    setEditingProduct(null);
+    setModalVisible(true);
   };
 
-  const handleEdit = (product) => {
-    Alert.alert('Coming Soon', `Edit ${product.name} - Modal will open here`);
+  // Open modal for editing product
+  const handleEditProduct = (product) => {
+    setEditingProduct(product);
+    setModalVisible(true);
   };
 
   return (
@@ -94,13 +137,24 @@ export default function ItemScreen({ theme, darkMode }) {
                 key={product.id}
                 product={product}
                 theme={theme}
-                onEdit={() => handleEdit(product)}
+                onEdit={() => handleEditProduct(product)}
                 onDelete={() => handleDeleteProduct(product.id)}
               />
             ))}
           </View>
         )}
       </ScrollView>
+
+      <AddProductModal
+        visible={modalVisible}
+        onClose={() => {
+          setModalVisible(false);
+          setEditingProduct(null);
+        }}
+        onSave={handleSaveProduct}
+        editProduct={editingProduct}
+        theme={theme}
+      />
     </View>
   );
 }

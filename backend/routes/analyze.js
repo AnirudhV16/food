@@ -24,6 +24,21 @@ const visionClient = new vision.ImageAnnotatorClient({
 
 // POST /api/analyze - Analyze product images
 router.post('/', upload.array('images', 4), async (req, res) => {
+  console.log('=== ANALYZE REQUEST DEBUG ===');
+  console.log('Files received:', req.files?.length || 0);
+  console.log('Headers:', req.headers);
+  if (req.files) {
+    req.files.forEach((file, i) => {
+      console.log(`File ${i}:`, {
+        fieldname: file.fieldname,
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size
+      });
+    });
+  }
+  console.log('=== END DEBUG ===');
+  
   try {
     // Validate files
     if (!req.files || req.files.length === 0) {

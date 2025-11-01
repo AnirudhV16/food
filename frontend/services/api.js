@@ -1,5 +1,6 @@
 // frontend/services/api.js
 import axios from 'axios';
+import { Platform } from 'react-native';
 
 // ========================================
 // CONFIGURATION
@@ -24,32 +25,51 @@ const API_BASE_URL = 'http://localhost:3001/api';
 
 /**
  * Analyze product images using Google Vision AI
- * @param {Array} imageFiles - Array of image objects with uri, type, name
+ * @param {Array} imageFiles - Array of File objects (web) or image objects with uri, type, name (mobile)
  * @returns {Promise} Response with extracted product data
  */
 export const analyzeImages = async (imageFiles) => {
   try {
+    console.log('analyzeImages called with', imageFiles.length, 'files');
+    console.log('Platform:', Platform.OS);
+
     const formData = new FormData();
-    
-    imageFiles.forEach((file, index) => {
-      // For React Native
-      formData.append('images', {
-        uri: file.uri,
-        type: file.type || 'image/jpeg',
-        name: file.name || `photo_${index}.jpg`,
+
+    if (Platform.OS === 'web') {
+      // Web: imageFiles are already File objects from the blob conversion
+      imageFiles.forEach((file, index) => {
+        console.log(`Appending file ${index}:`, file.name, file.type, file.size);
+        formData.append('images', file);
       });
-    });
+    } else {
+      // Mobile: Use URI with proper structure
+      imageFiles.forEach((file, index) => {
+        console.log(`Appending mobile file ${index}:`, file.uri);
+        formData.append('images', {
+          uri: file.uri,
+          type: file.type || 'image/jpeg',
+          name: file.name || `photo_${index}.jpg`,
+        });
+      });
+    }
+
+    console.log('Sending request to:', `${API_BASE_URL}/analyze`);
 
     const response = await axios.post(`${API_BASE_URL}/analyze`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
-      timeout: 30000, // 30 second timeout
+      timeout: 60000, // 60 second timeout for image processing
     });
 
+    console.log('Analysis response received:', response.data);
     return response.data;
   } catch (error) {
     console.error('analyzeImages error:', error);
+    if (error.response) {
+      console.error('Error response data:', error.response.data);
+      console.error('Error response status:', error.response.status);
+    }
     throw error;
   }
 };
@@ -62,6 +82,8 @@ export const analyzeImages = async (imageFiles) => {
  */
 export const generateRecipes = async (ingredients, customIngredients = []) => {
   try {
+    console.log('Generating recipes with ingredients:', ingredients);
+    
     const response = await axios.post(`${API_BASE_URL}/recipe/generate`, {
       ingredients,
       customIngredients
@@ -72,6 +94,9 @@ export const generateRecipes = async (ingredients, customIngredients = []) => {
     return response.data;
   } catch (error) {
     console.error('generateRecipes error:', error);
+    if (error.response) {
+      console.error('Error response:', error.response.data);
+    }
     throw error;
   }
 };
@@ -106,6 +131,8 @@ export const getRecipeDetails = async (recipeName, ingredients) => {
  */
 export const rateProduct = async (ingredients, productName = '') => {
   try {
+    console.log('Rating product:', productName, 'with', ingredients.length, 'ingredients');
+    
     const response = await axios.post(`${API_BASE_URL}/rating/analyze`, {
       ingredients,
       productName
@@ -116,6 +143,9 @@ export const rateProduct = async (ingredients, productName = '') => {
     return response.data;
   } catch (error) {
     console.error('rateProduct error:', error);
+    if (error.response) {
+      console.error('Error response:', error.response.data);
+    }
     throw error;
   }
 };
