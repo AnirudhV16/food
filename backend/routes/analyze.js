@@ -1,8 +1,8 @@
-// backend/routes/analyze.js
+// backend/routes/analyze.js - Using Tesseract.js (FREE, No API Key!)
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const vision = require('@google-cloud/vision');
+const Tesseract = require('tesseract.js');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 // Configure multer for file uploads
@@ -13,27 +13,24 @@ const upload = multer({
   }
 });
 
-// Initialize AI clients
+// Initialize Gemini AI
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// Initialize Vision API client with API key
-const visionClient = new vision.ImageAnnotatorClient({
-  keyFilename: undefined,
-  apiKey: process.env.GOOGLE_VISION_API_KEY
-});
-
-// POST /api/analyze - Analyze product images
+// POST /api/analyze - Analyze product images using Tesseract OCR
 router.post('/', upload.array('images', 4), async (req, res) => {
   console.log('=== ANALYZE REQUEST DEBUG ===');
+  console.log('Request method:', req.method);
+  console.log('Content-Type:', req.headers['content-type']);
   console.log('Files received:', req.files?.length || 0);
-  console.log('Headers:', req.headers);
-  if (req.files) {
+  
+  if (req.files && req.files.length > 0) {
     req.files.forEach((file, i) => {
-      console.log(`File ${i}:`, {
+      console.log(`File ${i + 1}:`, {
         fieldname: file.fieldname,
         originalname: file.originalname,
         mimetype: file.mimetype,
-        size: file.size
+        size: file.size,
+        bufferExists: !!file.buffer
       });
     });
   }
@@ -48,36 +45,41 @@ router.post('/', upload.array('images', 4), async (req, res) => {
       });
     }
 
-    console.log(`📸 Analyzing ${req.files.length} image(s)...`);
+    console.log(`📸 Analyzing ${req.files.length} image(s) with Tesseract OCR...`);
 
     const allText = [];
     const imageAnalysis = [];
 
-    // Process each image with Vision API
+    // Process each image with Tesseract OCR
     for (let i = 0; i < req.files.length; i++) {
       const file = req.files[i];
       console.log(`   Processing image ${i + 1}/${req.files.length}...`);
 
       try {
-        // Call Vision API for text detection
-        const [result] = await visionClient.textDetection({
-          image: { content: file.buffer }
-        });
+        // Use Tesseract to extract text from image
+        const { data: { text } } = await Tesseract.recognize(
+          file.buffer,
+          'eng', // English language
+          {
+            logger: m => {
+              if (m.status === 'recognizing text') {
+                console.log(`      Progress: ${Math.round(m.progress * 100)}%`);
+              }
+            }
+          }
+        );
         
-        const detections = result.textAnnotations;
-        
-        if (detections && detections.length > 0) {
-          const extractedText = detections[0].description;
-          allText.push(extractedText);
+        if (text && text.trim().length > 0) {
+          allText.push(text);
           
           imageAnalysis.push({
             imageIndex: i,
             textFound: true,
-            textLength: extractedText.length,
-            preview: extractedText.substring(0, 100) + '...'
+            textLength: text.length,
+            preview: text.substring(0, 100).replace(/\n/g, ' ') + '...'
           });
           
-          console.log(`   ✓ Image ${i + 1}: Found ${extractedText.length} characters`);
+          console.log(`   ✓ Image ${i + 1}: Found ${text.length} characters`);
         } else {
           imageAnalysis.push({
             imageIndex: i,
@@ -86,12 +88,12 @@ router.post('/', upload.array('images', 4), async (req, res) => {
           });
           console.log(`   ⚠ Image ${i + 1}: No text detected`);
         }
-      } catch (visionError) {
-        console.error(`   ✗ Image ${i + 1} Vision API error:`, visionError.message);
+      } catch (ocrError) {
+        console.error(`   ✗ Image ${i + 1} OCR error:`, ocrError.message);
         imageAnalysis.push({
           imageIndex: i,
           textFound: false,
-          error: visionError.message
+          error: ocrError.message
         });
       }
     }
@@ -102,7 +104,7 @@ router.post('/', upload.array('images', 4), async (req, res) => {
     if (!combinedText.trim()) {
       return res.status(400).json({
         error: 'No text found in images',
-        message: 'Please ensure images contain clear, readable text',
+        message: 'Please ensure images contain clear, readable text. Try taking clearer photos with good lighting.',
         imageAnalysis: imageAnalysis
       });
     }
@@ -110,7 +112,8 @@ router.post('/', upload.array('images', 4), async (req, res) => {
     console.log('🤖 Sending to Gemini AI for structured extraction...');
 
     // Use Gemini to extract structured data
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
+
     
     const prompt = `You are a food product label analyzer. Analyze the following text extracted from product labels and return a JSON object.
 
@@ -130,6 +133,7 @@ Rules:
 - If no date found, use null
 - Extract ALL ingredients mentioned
 - Be smart about date formats (e.g., "Dec 2025" = "2025-12-01")
+- Handle OCR errors (e.g., "0" vs "O", "1" vs "I", "5" vs "S")
 
 Return ONLY valid JSON with this exact structure:
 {
@@ -174,7 +178,8 @@ Return ONLY valid JSON with this exact structure:
       metadata: {
         imagesProcessed: req.files.length,
         textExtracted: combinedText.length,
-        imageAnalysis: imageAnalysis
+        imageAnalysis: imageAnalysis,
+        ocrEngine: 'Tesseract.js'
       },
       rawText: combinedText.substring(0, 500) + '...' // First 500 chars for reference
     });

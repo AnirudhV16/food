@@ -10,8 +10,9 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, addDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
+import { useAuth } from '../contexts/AuthContext';
 import { generateRecipes, getRecipeDetails } from '../services/api';
 
 export default function RecipeScreen({ theme, darkMode }) {
@@ -23,27 +24,58 @@ export default function RecipeScreen({ theme, darkMode }) {
   const [loading, setLoading] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [recipeHistory, setRecipeHistory] = useState([]);
+  
+  const { user } = useAuth();
 
-  // Load products from Firestore
+  // Load products from Firestore (only user's products)
   useEffect(() => {
-    const unsubscribe = onSnapshot(
+    if (!user) {
+      console.log('No user logged in, skipping product load');
+      return;
+    }
+
+    console.log('Loading products for user:', user.uid);
+
+    const q = query(
       collection(db, 'products'),
+      where('userId', '==', user.uid)
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
       (snapshot) => {
         const productList = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
+        console.log('Loaded', productList.length, 'products');
         setProducts(productList);
+      },
+      (error) => {
+        console.error('Error loading products:', error);
+        // Don't show alert, just log it
       }
     );
 
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
-  // Load recipe history
+  // Load recipe history (only user's history)
   useEffect(() => {
-    const unsubscribe = onSnapshot(
+    if (!user) {
+      console.log('No user logged in, skipping history load');
+      return;
+    }
+
+    console.log('Loading recipe history for user:', user.uid);
+
+    const q = query(
       collection(db, 'recipeHistory'),
+      where('userId', '==', user.uid)
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
       (snapshot) => {
         const history = snapshot.docs
           .map(doc => ({
@@ -52,12 +84,17 @@ export default function RecipeScreen({ theme, darkMode }) {
           }))
           .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
           .slice(0, 10);
+        console.log('Loaded', history.length, 'recipe history items');
         setRecipeHistory(history);
+      },
+      (error) => {
+        console.error('Error loading recipe history:', error);
+        // Don't show alert, just log it
       }
     );
 
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
   const toggleItem = (itemId) => {
     if (selectedItems.includes(itemId)) {
@@ -85,10 +122,13 @@ export default function RecipeScreen({ theme, darkMode }) {
         .map(i => i.trim())
         .filter(Boolean);
 
+      console.log('Generating recipes with:', ingredientNames, customIngredients);
+
       const response = await generateRecipes(ingredientNames, customIngredients);
       
       if (response.success && response.recipes) {
         setGeneratedRecipes(response.recipes);
+        console.log('Generated', response.recipes.length, 'recipes');
       } else {
         Alert.alert('Error', 'Failed to generate recipes');
       }
@@ -108,17 +148,28 @@ export default function RecipeScreen({ theme, darkMode }) {
         return product?.name;
       }).filter(Boolean);
 
+      console.log('Getting details for recipe:', recipe.name);
+
       const response = await getRecipeDetails(recipe.name, ingredientNames);
       
       if (response.success && response.recipe) {
         setSelectedRecipe(response.recipe);
         
-        // Save to history
-        // await addDoc(collection(db, 'recipeHistory'), {
-        //   name: recipe.name,
-        //   ingredients: ingredientNames,
-        //   createdAt: new Date().toISOString()
-        // });
+        // Save to history (with userId)
+        if (user) {
+          try {
+            await addDoc(collection(db, 'recipeHistory'), {
+              name: recipe.name,
+              ingredients: ingredientNames,
+              userId: user.uid, // Add userId for security rules
+              createdAt: new Date().toISOString()
+            });
+            console.log('Saved recipe to history');
+          } catch (historyError) {
+            console.error('Failed to save recipe history:', historyError);
+            // Don't show error to user, history is optional
+          }
+        }
       } else {
         Alert.alert('Error', 'Failed to get recipe details');
       }
@@ -138,7 +189,7 @@ export default function RecipeScreen({ theme, darkMode }) {
       
       {products.length === 0 ? (
         <Text style={[styles.emptyText, { color: theme.textMuted }]}>
-          No products available. Add products first.
+          No products available. Add products first in the Items tab.
         </Text>
       ) : (
         products.map((product) => (
@@ -168,7 +219,7 @@ export default function RecipeScreen({ theme, darkMode }) {
       )}
 
       <TextInput
-        style={[styles.input, { color: theme.text, borderColor: theme.border }]}
+        style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.card }]}
         placeholder="Add custom ingredients (e.g., eggs, salt)"
         placeholderTextColor={theme.textMuted}
         value={customIngredient}
@@ -301,7 +352,7 @@ export default function RecipeScreen({ theme, darkMode }) {
               {new Date(recipe.createdAt).toLocaleDateString()}
             </Text>
             <Text style={[styles.historyIngredients, { color: theme.textMuted }]}>
-              {recipe.ingredients.join(', ')}
+              {recipe.ingredients?.join(', ') || 'No ingredients listed'}
             </Text>
           </View>
         ))
@@ -321,7 +372,7 @@ export default function RecipeScreen({ theme, darkMode }) {
         )}
       </ScrollView>
 
-      {!showHistory && !selectedRecipe && (
+      {!showHistory && !selectedRecipe && recipeHistory.length > 0 && (
         <TouchableOpacity
           style={styles.historyButton}
           onPress={() => setShowHistory(true)}

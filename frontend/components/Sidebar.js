@@ -29,14 +29,28 @@ export default function Sidebar({
       'Logout',
       'Are you sure you want to logout?',
       [
-        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Cancel', 
+          style: 'cancel' 
+        },
         {
           text: 'Logout',
           style: 'destructive',
           onPress: async () => {
-            const result = await logout();
-            if (!result.success) {
-              Alert.alert('Error', 'Failed to logout');
+            try {
+              console.log('Logging out...');
+              const result = await logout();
+              
+              if (result.success) {
+                console.log('✅ Logout successful');
+                // No need to do anything else - AuthContext will handle the state
+              } else {
+                console.error('❌ Logout failed:', result.error);
+                Alert.alert('Error', result.error || 'Failed to logout');
+              }
+            } catch (error) {
+              console.error('❌ Logout error:', error);
+              Alert.alert('Error', 'An error occurred while logging out');
             }
           }
         }
@@ -90,6 +104,9 @@ export default function Sidebar({
           </View>
           <Text style={[styles.userName, { color: theme.text }]} numberOfLines={1}>
             {user?.email || 'User'}
+          </Text>
+          <Text style={[styles.userStatus, { color: theme.textMuted }]}>
+            ✓ Logged in
           </Text>
         </View>
 
@@ -159,11 +176,12 @@ export default function Sidebar({
         {/* Logout Button */}
         <View style={styles.bottomSection}>
           <TouchableOpacity
-            style={[styles.logoutButton, { backgroundColor: darkMode ? '#374151' : '#F3F4F6' }]}
+            style={[styles.logoutButton, { backgroundColor: darkMode ? '#374151' : '#FEE2E2' }]}
             onPress={handleLogout}
+            activeOpacity={0.7}
           >
             <Text style={styles.logoutIcon}>🚪</Text>
-            <Text style={[styles.logoutText, { color: '#ef4444' }]}>
+            <Text style={[styles.logoutText, { color: '#DC2626' }]}>
               Logout
             </Text>
           </TouchableOpacity>
@@ -247,6 +265,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     width: '100%',
     textAlign: 'center',
+    marginBottom: 4,
+  },
+  userStatus: {
+    fontSize: 13,
   },
   themeButton: {
     flexDirection: 'row',
@@ -293,6 +315,8 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 8,
     gap: 12,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
   },
   logoutIcon: {
     fontSize: 20,

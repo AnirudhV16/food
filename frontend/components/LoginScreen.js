@@ -21,29 +21,88 @@ export default function LoginScreen({ theme }) {
   
   const { login, signup } = useAuth();
 
+  // Helper function to get user-friendly error messages
+  const getErrorMessage = (error) => {
+    console.log('Firebase error:', error);
+    
+    // Extract error code from Firebase error
+    const errorCode = error?.code || error?.message || '';
+    
+    switch (errorCode) {
+      case 'auth/invalid-email':
+        return 'Invalid email address format';
+      case 'auth/user-disabled':
+        return 'This account has been disabled';
+      case 'auth/user-not-found':
+        return 'No account found with this email';
+      case 'auth/wrong-password':
+        return 'Incorrect password';
+      case 'auth/invalid-credential':
+        return 'Invalid email or password';
+      case 'auth/email-already-in-use':
+        return 'This email is already registered';
+      case 'auth/weak-password':
+        return 'Password should be at least 6 characters';
+      case 'auth/operation-not-allowed':
+        return 'Email/password login is not enabled';
+      case 'auth/too-many-requests':
+        return 'Too many failed attempts. Please try again later';
+      case 'auth/network-request-failed':
+        return 'Network error. Check your internet connection';
+      default:
+        return error?.message || 'Authentication failed';
+    }
+  };
+
   const handleSubmit = async () => {
-    if (!email.trim() || !password.trim()) {
-      Alert.alert('Error', 'Please enter email and password');
+    // Validate inputs
+    if (!email.trim()) {
+      Alert.alert('Missing Email', 'Please enter your email address');
+      return;
+    }
+
+    if (!password.trim()) {
+      Alert.alert('Missing Password', 'Please enter your password');
       return;
     }
 
     if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
+      Alert.alert('Weak Password', 'Password must be at least 6 characters long');
+      return;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      Alert.alert('Invalid Email', 'Please enter a valid email address');
       return;
     }
 
     setLoading(true);
 
     try {
+      console.log(isSignup ? 'Attempting signup...' : 'Attempting login...');
+      
       const result = isSignup 
-        ? await signup(email, password)
-        : await login(email, password);
+        ? await signup(email.trim(), password)
+        : await login(email.trim(), password);
 
       if (!result.success) {
-        Alert.alert('Error', result.error);
+        // Show user-friendly error message
+        const errorMessage = getErrorMessage(result.error);
+        console.error('Auth error:', result.error);
+        Alert.alert(
+          isSignup ? 'Signup Failed' : 'Login Failed',
+          errorMessage
+        );
+      } else {
+        console.log('✅ Authentication successful!');
+        // AuthContext will handle navigation automatically
       }
     } catch (error) {
-      Alert.alert('Error', error.message);
+      console.error('Unexpected auth error:', error);
+      const errorMessage = getErrorMessage(error);
+      Alert.alert('Error', errorMessage);
     } finally {
       setLoading(false);
     }
@@ -81,6 +140,7 @@ export default function LoginScreen({ theme }) {
               keyboardType="email-address"
               autoCapitalize="none"
               autoComplete="email"
+              autoCorrect={false}
             />
           </View>
 
@@ -98,26 +158,35 @@ export default function LoginScreen({ theme }) {
               placeholderTextColor={theme.textMuted}
               secureTextEntry
               autoCapitalize="none"
+              autoComplete="password"
             />
+            <Text style={[styles.helperText, { color: theme.textMuted }]}>
+              At least 6 characters
+            </Text>
           </View>
 
           <TouchableOpacity
             style={[styles.submitButton, loading && styles.buttonDisabled]}
             onPress={handleSubmit}
             disabled={loading}
+            activeOpacity={0.7}
           >
             {loading ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
               <Text style={styles.submitButtonText}>
-                {isSignup ? 'Sign Up' : 'Log In'}
+                {isSignup ? 'Create Account' : 'Log In'}
               </Text>
             )}
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.toggleButton}
-            onPress={() => setIsSignup(!isSignup)}
+            onPress={() => {
+              setIsSignup(!isSignup);
+              // Clear password when switching
+              setPassword('');
+            }}
             disabled={loading}
           >
             <Text style={[styles.toggleButtonText, { color: theme.primary }]}>
@@ -183,6 +252,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
+  },
+  helperText: {
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 4,
   },
   submitButton: {
     backgroundColor: '#3B82F6',

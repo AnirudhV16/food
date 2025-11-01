@@ -28,7 +28,8 @@ router.post('/generate', async (req, res) => {
     const ingredientList = allIngredients.join(', ');
     console.log('🍳 Generating recipes for:', ingredientList);
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
+
     
     const prompt = `You are a creative chef. Generate 3 different recipe ideas using these ingredients: ${ingredientList}
 

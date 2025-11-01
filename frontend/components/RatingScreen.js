@@ -1,8 +1,9 @@
 // frontend/components/RatingScreen.js
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../services/firebase';
+import { useAuth } from '../contexts/AuthContext';
 
 const getStarColor = (rating) => {
   const colors = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e'];
@@ -12,26 +13,33 @@ const getStarColor = (rating) => {
 export default function RatingScreen({ theme, darkMode }) {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(
+    if (!user) {
+      console.log('No user logged in');
+      setLoading(false);
+      return;
+    }
+
+    console.log('Loading products for ratings, user:', user.uid);
+
+    // Query only user's products
+    const q = query(
       collection(db, 'products'),
+      where('userId', '==', user.uid)
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
       (snapshot) => {
         const productList = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
         
-        // Remove duplicates by product name
-        const uniqueProducts = productList.reduce((acc, product) => {
-          const existing = acc.find(p => p.name.toLowerCase() === product.name.toLowerCase());
-          if (!existing) {
-            acc.push(product);
-          }
-          return acc;
-        }, []);
-        
-        setProducts(uniqueProducts);
+        console.log('Loaded', productList.length, 'products for rating');
+        setProducts(productList);
         setLoading(false);
       },
       (error) => {
@@ -41,7 +49,7 @@ export default function RatingScreen({ theme, darkMode }) {
     );
 
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
   const renderStars = (rating) => {
     return (

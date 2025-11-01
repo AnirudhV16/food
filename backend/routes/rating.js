@@ -25,7 +25,8 @@ router.post('/analyze', async (req, res) => {
     console.log('⭐ Analyzing health rating for:', product);
     console.log('   Ingredients:', ingredientList);
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
+
     
     const prompt = `You are a nutrition expert. Analyze the health quality of a food product with these ingredients: ${ingredientList}
 
