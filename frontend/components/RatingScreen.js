@@ -1,4 +1,4 @@
-// frontend/components/RatingScreen.js
+// frontend/components/RatingScreen.js - FIXED VERSION
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';

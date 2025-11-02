@@ -1,4 +1,4 @@
-// frontend/components/Sidebar.js
+// frontend/components/Sidebar.js - FIXED VERSION
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated, Alert } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
@@ -24,7 +24,7 @@ export default function Sidebar({
     }).start();
   }, [isOpen]);
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
     Alert.alert(
       'Logout',
       'Are you sure you want to logout?',
@@ -36,22 +36,28 @@ export default function Sidebar({
         {
           text: 'Logout',
           style: 'destructive',
-          onPress: async () => {
-            try {
-              console.log('Logging out...');
-              const result = await logout();
-              
-              if (result.success) {
-                console.log('✅ Logout successful');
-                // No need to do anything else - AuthContext will handle the state
-              } else {
-                console.error('❌ Logout failed:', result.error);
-                Alert.alert('Error', result.error || 'Failed to logout');
-              }
-            } catch (error) {
-              console.error('❌ Logout error:', error);
-              Alert.alert('Error', 'An error occurred while logging out');
-            }
+          onPress: () => {
+            console.log('🚪 User clicked logout');
+            console.log('Current user email:', user?.email);
+            
+            // Call logout function
+            logout()
+              .then((result) => {
+                if (result.success) {
+                  console.log('✅ Logout successful');
+                  // Force page reload for web
+                  if (typeof window !== 'undefined') {
+                    window.location.reload();
+                  }
+                } else {
+                  console.error('❌ Logout failed:', result.error);
+                  Alert.alert('Error', result.error || 'Failed to logout');
+                }
+              })
+              .catch((error) => {
+                console.error('❌ Logout error:', error);
+                Alert.alert('Error', 'An error occurred while logging out');
+              });
           }
         }
       ]

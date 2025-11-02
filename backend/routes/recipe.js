@@ -135,7 +135,7 @@ router.post('/details', async (req, res) => {
     const ingredientList = ingredients ? ingredients.join(', ') : 'available ingredients';
     console.log('📖 Getting recipe details for:', recipeName);
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
     
     const prompt = `Create a detailed recipe for "${recipeName}" using these ingredients: ${ingredientList}
 

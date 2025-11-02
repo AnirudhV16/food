@@ -1,4 +1,4 @@
-// frontend/components/ItemScreen.js
+// frontend/components/ItemScreen.js - FIXED VERSION
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where } from 'firebase/firestore';
@@ -49,6 +49,7 @@ export default function ItemScreen({ theme, darkMode }) {
     try {
       if (editingProduct) {
         // Update existing product
+        console.log('💾 Updating product:', editingProduct.id);
         await updateDoc(doc(db, 'products', editingProduct.id), {
           ...productData,
           userId: user.uid, // Ensure userId is always set
@@ -56,6 +57,7 @@ export default function ItemScreen({ theme, darkMode }) {
         Alert.alert('Success', 'Product updated successfully!');
       } else {
         // Add new product
+        console.log('➕ Adding new product');
         await addDoc(collection(db, 'products'), {
           ...productData,
           userId: user.uid, // Add userId for security rules
@@ -64,34 +66,26 @@ export default function ItemScreen({ theme, darkMode }) {
       }
       setEditingProduct(null);
     } catch (error) {
-      console.error('Error saving product:', error);
+      console.error('❌ Error saving product:', error);
       Alert.alert('Error', 'Failed to save product: ' + error.message);
       throw error;
     }
   };
 
-  // Delete product
-  const handleDeleteProduct = (productId) => {
-    Alert.alert(
-      'Delete Product',
-      'Are you sure you want to delete this product?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteDoc(doc(db, 'products', productId));
-              Alert.alert('Success', 'Product deleted successfully!');
-            } catch (error) {
-              console.error('Error deleting product:', error);
-              Alert.alert('Error', 'Failed to delete product');
-            }
-          }
-        }
-      ]
-    );
+  // Delete product - FIXED VERSION
+  const handleDeleteProduct = async (productId) => {
+    try {
+      console.log('🗑️ Deleting product:', productId);
+      
+      // Delete from Firestore
+      await deleteDoc(doc(db, 'products', productId));
+      
+      console.log('✅ Product deleted successfully');
+      Alert.alert('Success', 'Product deleted successfully!');
+    } catch (error) {
+      console.error('❌ Error deleting product:', error);
+      Alert.alert('Error', 'Failed to delete product: ' + error.message);
+    }
   };
 
   // Open modal for adding new product
@@ -102,6 +96,7 @@ export default function ItemScreen({ theme, darkMode }) {
 
   // Open modal for editing product
   const handleEditProduct = (product) => {
+    console.log('✏️ Editing product:', product.name);
     setEditingProduct(product);
     setModalVisible(true);
   };

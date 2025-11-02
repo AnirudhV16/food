@@ -1,10 +1,13 @@
-// frontend/contexts/AuthContext.js
+// frontend/contexts/AuthContext.js - FIXED VERSION
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword,
   signOut,
-  onAuthStateChanged 
+  onAuthStateChanged,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence
 } from 'firebase/auth';
 import { auth } from '../services/firebase';
 
@@ -17,23 +20,38 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log('Setting up auth listener...');
+    console.log('🔐 Setting up auth listener...');
+    
+    // Set persistence to LOCAL (you can change to SESSION if you want)
+    // LOCAL = persists even after browser close
+    // SESSION = persists only during browser session
+    setPersistence(auth, browserLocalPersistence)
+      .then(() => {
+        console.log('✅ Auth persistence set to LOCAL');
+      })
+      .catch((error) => {
+        console.error('❌ Failed to set persistence:', error);
+      });
     
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log('Auth state changed:', user ? user.email : 'No user');
+      if (user) {
+        console.log('✅ Auth state: User logged in -', user.email);
+      } else {
+        console.log('❌ Auth state: No user logged in');
+      }
       setUser(user);
       setLoading(false);
     });
 
     return () => {
-      console.log('Cleaning up auth listener');
+      console.log('🧹 Cleaning up auth listener');
       unsubscribe();
     };
   }, []);
 
   const signup = async (email, password) => {
     try {
-      console.log('Creating new account for:', email);
+      console.log('📝 Creating new account for:', email);
       const result = await createUserWithEmailAndPassword(auth, email, password);
       console.log('✅ Signup successful:', result.user.email);
       return { success: true, user: result.user };
@@ -45,7 +63,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      console.log('Attempting login for:', email);
+      console.log('🔑 Attempting login for:', email);
       const result = await signInWithEmailAndPassword(auth, email, password);
       console.log('✅ Login successful:', result.user.email);
       return { success: true, user: result.user };
@@ -57,10 +75,16 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      console.log('Attempting logout...');
+      console.log('🚪 Attempting logout...');
+      console.log('Current user before logout:', user?.email);
+      
+      // Sign out from Firebase
       await signOut(auth);
-      console.log('✅ Logout successful');
-      setUser(null); // Immediately clear user state
+      
+      // Force clear user state
+      setUser(null);
+      
+      console.log('✅ Logout successful - user state cleared');
       return { success: true };
     } catch (error) {
       console.error('❌ Logout error:', error);

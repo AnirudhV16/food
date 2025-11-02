@@ -1,4 +1,4 @@
-// frontend/components/RecipeScreen.js
+// frontend/components/RecipeScreen.js - FIXED VERSION
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -10,7 +10,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { collection, onSnapshot, query, where, addDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, addDoc, orderBy, limit } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { generateRecipes, getRecipeDetails } from '../services/api';
@@ -22,78 +22,143 @@ export default function RecipeScreen({ theme, darkMode }) {
   const [generatedRecipes, setGeneratedRecipes] = useState([]);
   const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [loadingProducts, setLoadingProducts] = useState(true);
   const [showHistory, setShowHistory] = useState(false);
   const [recipeHistory, setRecipeHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
   
   const { user } = useAuth();
 
   // Load products from Firestore (only user's products)
   useEffect(() => {
     if (!user) {
-      console.log('No user logged in, skipping product load');
+      console.log('📝 No user logged in, skipping product load');
+      setLoadingProducts(false);
       return;
     }
 
-    console.log('Loading products for user:', user.uid);
+    console.log('📦 Loading products for user:', user.uid);
+    setLoadingProducts(true);
 
-    const q = query(
-      collection(db, 'products'),
-      where('userId', '==', user.uid)
-    );
+    try {
+      const q = query(
+        collection(db, 'products'),
+        where('userId', '==', user.uid)
+      );
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const productList = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        console.log('Loaded', productList.length, 'products');
-        setProducts(productList);
-      },
-      (error) => {
-        console.error('Error loading products:', error);
-        // Don't show alert, just log it
-      }
-    );
+      const unsubscribe = onSnapshot(
+        q,
+        (snapshot) => {
+          const productList = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          console.log('✅ Loaded', productList.length, 'products');
+          setProducts(productList);
+          setLoadingProducts(false);
+        },
+        (error) => {
+          console.error('❌ Error loading products:', error);
+          console.error('Error code:', error.code);
+          console.error('Error message:', error.message);
+          setLoadingProducts(false);
+        }
+      );
 
-    return () => unsubscribe();
+      return () => {
+        console.log('🧹 Cleaning up products listener');
+        unsubscribe();
+      };
+    } catch (error) {
+      console.error('❌ Error setting up products listener:', error);
+      setLoadingProducts(false);
+    }
   }, [user]);
 
   // Load recipe history (only user's history)
   useEffect(() => {
     if (!user) {
-      console.log('No user logged in, skipping history load');
+      console.log('📝 No user logged in, skipping history load');
+      setLoadingHistory(false);
       return;
     }
 
-    console.log('Loading recipe history for user:', user.uid);
+    console.log('📜 Loading recipe history for user:', user.uid);
+    setLoadingHistory(true);
 
-    const q = query(
-      collection(db, 'recipeHistory'),
-      where('userId', '==', user.uid)
-    );
+    try {
+      const q = query(
+        collection(db, 'recipeHistory'),
+        where('userId', '==', user.uid),
+        orderBy('createdAt', 'desc'),
+        limit(10)
+      );
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const history = snapshot.docs
-          .map(doc => ({
+      const unsubscribe = onSnapshot(
+        q,
+        (snapshot) => {
+          const history = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
-          }))
-          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-          .slice(0, 10);
-        console.log('Loaded', history.length, 'recipe history items');
-        setRecipeHistory(history);
-      },
-      (error) => {
-        console.error('Error loading recipe history:', error);
-        // Don't show alert, just log it
-      }
-    );
+          }));
+          console.log('✅ Loaded', history.length, 'recipe history items');
+          setRecipeHistory(history);
+          setLoadingHistory(false);
+        },
+        (error) => {
+          console.error('❌ Error loading recipe history:', error);
+          console.error('Error code:', error.code);
+          console.error('Error message:', error.message);
+          
+          // If orderBy fails (index not created), try without ordering
+          if (error.code === 'failed-precondition') {
+            console.log('⚠️ Firestore index missing, loading without ordering...');
+            
+            const simpleQuery = query(
+              collection(db, 'recipeHistory'),
+              where('userId', '==', user.uid),
+              limit(10)
+            );
+            
+            const simpleUnsubscribe = onSnapshot(
+              simpleQuery,
+              (snapshot) => {
+                const history = snapshot.docs
+                  .map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                  }))
+                  .sort((a, b) => {
+                    const dateA = new Date(a.createdAt || 0);
+                    const dateB = new Date(b.createdAt || 0);
+                    return dateB - dateA;
+                  })
+                  .slice(0, 10);
+                console.log('✅ Loaded', history.length, 'recipe history items (without index)');
+                setRecipeHistory(history);
+                setLoadingHistory(false);
+              },
+              (simpleError) => {
+                console.error('❌ Error with simple query:', simpleError);
+                setLoadingHistory(false);
+              }
+            );
+            
+            return () => simpleUnsubscribe();
+          } else {
+            setLoadingHistory(false);
+          }
+        }
+      );
 
-    return () => unsubscribe();
+      return () => {
+        console.log('🧹 Cleaning up recipe history listener');
+        unsubscribe();
+      };
+    } catch (error) {
+      console.error('❌ Error setting up history listener:', error);
+      setLoadingHistory(false);
+    }
   }, [user]);
 
   const toggleItem = (itemId) => {
@@ -122,18 +187,18 @@ export default function RecipeScreen({ theme, darkMode }) {
         .map(i => i.trim())
         .filter(Boolean);
 
-      console.log('Generating recipes with:', ingredientNames, customIngredients);
+      console.log('🍳 Generating recipes with:', ingredientNames, customIngredients);
 
       const response = await generateRecipes(ingredientNames, customIngredients);
       
       if (response.success && response.recipes) {
         setGeneratedRecipes(response.recipes);
-        console.log('Generated', response.recipes.length, 'recipes');
+        console.log('✅ Generated', response.recipes.length, 'recipes');
       } else {
         Alert.alert('Error', 'Failed to generate recipes');
       }
     } catch (error) {
-      console.error('Recipe generation error:', error);
+      console.error('❌ Recipe generation error:', error);
       Alert.alert('Error', 'Failed to generate recipes. Please try again.');
     } finally {
       setLoading(false);
@@ -148,7 +213,7 @@ export default function RecipeScreen({ theme, darkMode }) {
         return product?.name;
       }).filter(Boolean);
 
-      console.log('Getting details for recipe:', recipe.name);
+      console.log('📖 Getting details for recipe:', recipe.name);
 
       const response = await getRecipeDetails(recipe.name, ingredientNames);
       
@@ -161,20 +226,19 @@ export default function RecipeScreen({ theme, darkMode }) {
             await addDoc(collection(db, 'recipeHistory'), {
               name: recipe.name,
               ingredients: ingredientNames,
-              userId: user.uid, // Add userId for security rules
+              userId: user.uid,
               createdAt: new Date().toISOString()
             });
-            console.log('Saved recipe to history');
+            console.log('✅ Saved recipe to history');
           } catch (historyError) {
-            console.error('Failed to save recipe history:', historyError);
-            // Don't show error to user, history is optional
+            console.error('❌ Failed to save recipe history:', historyError);
           }
         }
       } else {
         Alert.alert('Error', 'Failed to get recipe details');
       }
     } catch (error) {
-      console.error('Recipe details error:', error);
+      console.error('❌ Recipe details error:', error);
       Alert.alert('Error', 'Failed to get recipe details');
     } finally {
       setLoading(false);
@@ -187,10 +251,22 @@ export default function RecipeScreen({ theme, darkMode }) {
         Select Ingredients
       </Text>
       
-      {products.length === 0 ? (
-        <Text style={[styles.emptyText, { color: theme.textMuted }]}>
-          No products available. Add products first in the Items tab.
-        </Text>
+      {loadingProducts ? (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#3B82F6" />
+          <Text style={[styles.loadingText, { color: theme.textMuted }]}>
+            Loading products...
+          </Text>
+        </View>
+      ) : products.length === 0 ? (
+        <View style={[styles.emptyBox, { backgroundColor: darkMode ? '#374151' : '#F3F4F6' }]}>
+          <Text style={[styles.emptyText, { color: theme.textMuted }]}>
+            No products available
+          </Text>
+          <Text style={[styles.emptySubText, { color: theme.textMuted }]}>
+            Add products first in the Items tab
+          </Text>
+        </View>
       ) : (
         products.map((product) => (
           <TouchableOpacity
@@ -335,10 +411,22 @@ export default function RecipeScreen({ theme, darkMode }) {
         Recipe History
       </Text>
 
-      {recipeHistory.length === 0 ? (
-        <Text style={[styles.emptyText, { color: theme.textMuted }]}>
-          No recipe history yet
-        </Text>
+      {loadingHistory ? (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#3B82F6" />
+          <Text style={[styles.loadingText, { color: theme.textMuted }]}>
+            Loading history...
+          </Text>
+        </View>
+      ) : recipeHistory.length === 0 ? (
+        <View style={[styles.emptyBox, { backgroundColor: darkMode ? '#374151' : '#F3F4F6' }]}>
+          <Text style={[styles.emptyText, { color: theme.textMuted }]}>
+            No recipe history yet
+          </Text>
+          <Text style={[styles.emptySubText, { color: theme.textMuted }]}>
+            Generate recipes to see your history
+          </Text>
+        </View>
       ) : (
         recipeHistory.map((recipe) => (
           <View
@@ -349,7 +437,7 @@ export default function RecipeScreen({ theme, darkMode }) {
               {recipe.name}
             </Text>
             <Text style={[styles.historyDate, { color: theme.textMuted }]}>
-              {new Date(recipe.createdAt).toLocaleDateString()}
+              {recipe.createdAt ? new Date(recipe.createdAt).toLocaleDateString() : 'Unknown date'}
             </Text>
             <Text style={[styles.historyIngredients, { color: theme.textMuted }]}>
               {recipe.ingredients?.join(', ') || 'No ingredients listed'}
@@ -404,6 +492,31 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 24,
     marginBottom: 16,
+  },
+  centerContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 32,
+  },
+  loadingText: {
+    fontSize: 16,
+    marginTop: 12,
+  },
+  emptyBox: {
+    padding: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  emptyText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptySubText: {
+    fontSize: 14,
+    textAlign: 'center',
   },
   checkboxItem: {
     flexDirection: 'row',
@@ -548,10 +661,5 @@ const styles = StyleSheet.create({
   },
   historyIngredients: {
     fontSize: 14,
-  },
-  emptyText: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginTop: 24,
   },
 });

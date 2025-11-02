@@ -1,9 +1,8 @@
-// frontend/components/ItemCard.js
+// frontend/components/ItemCard.js - FIXED VERSION
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 
 // Helper functions
-
 const getStarColor = (rating) => {
   const colors = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e'];
   return colors[rating - 1] || '#6b7280';
@@ -19,6 +18,41 @@ const calculateDaysUntilExpiry = (expDate) => {
 export default function ItemCard({ product, theme, onEdit, onDelete }) {
   const daysLeft = calculateDaysUntilExpiry(product.expDate);
   const rating = product.rating || 3;
+
+  const handleEdit = () => {
+    console.log('✏️ Edit button clicked for:', product.name);
+    if (onEdit) {
+      onEdit();
+    } else {
+      console.error('❌ onEdit function not provided');
+    }
+  };
+
+  const handleDelete = () => {
+    console.log('🗑️ Delete button clicked for:', product.name);
+    if (onDelete) {
+      Alert.alert(
+        'Delete Product',
+        `Are you sure you want to delete "${product.name}"?`,
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel'
+          },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: () => {
+              console.log('✓ User confirmed delete');
+              onDelete();
+            }
+          }
+        ]
+      );
+    } else {
+      console.error('❌ onDelete function not provided');
+    }
+  };
 
   return (
     <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -59,10 +93,18 @@ export default function ItemCard({ product, theme, onEdit, onDelete }) {
 
       {/* Buttons */}
       <View style={styles.buttons}>
-        <TouchableOpacity style={styles.editButton} onPress={onEdit}>
+        <TouchableOpacity 
+          style={styles.editButton} 
+          onPress={handleEdit}
+          activeOpacity={0.7}
+        >
           <Text style={styles.buttonText}>Edit</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.deleteButton} onPress={onDelete}>
+        <TouchableOpacity 
+          style={styles.deleteButton} 
+          onPress={handleDelete}
+          activeOpacity={0.7}
+        >
           <Text style={styles.buttonText}>Delete</Text>
         </TouchableOpacity>
       </View>
