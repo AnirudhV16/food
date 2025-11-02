@@ -1,6 +1,6 @@
-// frontend/components/ItemCard.js - SIMPLE & PROFESSIONAL
+// frontend/components/ItemCard.js - TEST VERSION (NO ALERT)
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 
 const calculateDaysUntilExpiry = (expDate) => {
   const today = new Date();
@@ -24,32 +24,36 @@ export default function ItemCard({ product, theme, onEdit, onDelete }) {
   const expiryStatus = getExpiryStatus(daysLeft);
 
   const handleDelete = () => {
-    console.log('🗑️ Delete initiated for:', product.id);
+    console.log('🗑️ Delete clicked - DIRECT CALL (NO ALERT)');
+    console.log('Product:', product.id, product.name);
+    console.log('onDelete exists?', !!onDelete);
+    console.log('onDelete type:', typeof onDelete);
     
-    Alert.alert(
-      'Delete Product',
-      `Delete "${product.name}"?`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-          onPress: () => console.log('Delete cancelled')
-        },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            console.log('✓ Deleting product:', product.id);
-            if (onDelete) {
-              onDelete();
-            } else {
-              console.error('❌ onDelete not provided');
-            }
-          }
-        }
-      ],
-      { cancelable: true }
-    );
+    if (!onDelete) {
+      console.error('❌ onDelete is null/undefined');
+      return;
+    }
+    
+    // DIRECT CALL - NO CONFIRMATION
+    console.log('Calling onDelete() directly...');
+    try {
+      onDelete();
+      console.log('✅ onDelete() called successfully');
+    } catch (error) {
+      console.error('❌ Error calling onDelete:', error);
+    }
+  };
+
+  const handleEdit = () => {
+    console.log('✏️ Edit clicked');
+    console.log('Product:', product.id, product.name);
+    
+    if (!onEdit) {
+      console.error('❌ onEdit is null/undefined');
+      return;
+    }
+    
+    onEdit();
   };
 
   return (
@@ -71,10 +75,7 @@ export default function ItemCard({ product, theme, onEdit, onDelete }) {
       <View style={styles.actions}>
         <TouchableOpacity
           style={styles.actionButton}
-          onPress={() => {
-            console.log('✏️ Edit clicked');
-            if (onEdit) onEdit();
-          }}
+          onPress={handleEdit}
           activeOpacity={0.7}
         >
           <Text style={[styles.actionText, { color: '#3B82F6' }]}>Edit</Text>
@@ -87,7 +88,7 @@ export default function ItemCard({ product, theme, onEdit, onDelete }) {
           onPress={handleDelete}
           activeOpacity={0.7}
         >
-          <Text style={[styles.actionText, { color: '#DC2626' }]}>Delete</Text>
+          <Text style={[styles.actionText, { color: '#DC2626' }]}>Delete (TEST)</Text>
         </TouchableOpacity>
       </View>
     </View>

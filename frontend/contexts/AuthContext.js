@@ -1,4 +1,4 @@
-// frontend/contexts/AuthContext.js - FINAL FIXED VERSION
+// frontend/contexts/AuthContext.js - ENHANCED DEBUG VERSION
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { 
   createUserWithEmailAndPassword, 
@@ -10,7 +10,11 @@ import { auth } from '../services/firebase';
 
 const AuthContext = createContext({});
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  console.log('useAuth called, context exists?', !!context);
+  return context;
+};
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -18,14 +22,18 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     console.log('🔐 Setting up auth listener...');
+    console.log('Auth object:', auth);
+    console.log('Auth currentUser:', auth.currentUser?.email);
     
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        console.log('✅ Auth state: User logged in -', user.email);
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      console.log('🔔 Auth state changed!');
+      if (firebaseUser) {
+        console.log('✅ User logged in:', firebaseUser.email);
+        console.log('User UID:', firebaseUser.uid);
       } else {
-        console.log('❌ Auth state: No user logged in');
+        console.log('❌ No user logged in');
       }
-      setUser(user);
+      setUser(firebaseUser);
       setLoading(false);
     });
 
@@ -37,7 +45,7 @@ export const AuthProvider = ({ children }) => {
 
   const signup = async (email, password) => {
     try {
-      console.log('📝 Creating new account for:', email);
+      console.log('📝 Creating account for:', email);
       const result = await createUserWithEmailAndPassword(auth, email, password);
       console.log('✅ Signup successful:', result.user.email);
       return { success: true, user: result.user };
@@ -59,22 +67,29 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = () => {
-    return new Promise((resolve) => {
-      console.log('🚪 Logout called');
-      console.log('Current user:', user?.email);
+  const logout = async () => {
+    console.log('=== LOGOUT FUNCTION CALLED ===');
+    console.log('Current user before logout:', user?.email);
+    console.log('Auth currentUser before logout:', auth.currentUser?.email);
+    
+    try {
+      console.log('Calling Firebase signOut...');
+      await signOut(auth);
       
-      signOut(auth)
-        .then(() => {
-          console.log('✅ Firebase signOut successful');
-          setUser(null);
-          resolve({ success: true });
-        })
-        .catch((error) => {
-          console.error('❌ Logout error:', error);
-          resolve({ success: false, error: error.message });
-        });
-    });
+      console.log('✅ Firebase signOut completed');
+      console.log('Auth currentUser after signOut:', auth.currentUser);
+      
+      // Update local state
+      setUser(null);
+      console.log('✅ Local user state cleared');
+      
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Logout error:', error);
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+      return { success: false, error: error.message };
+    }
   };
 
   const value = {
@@ -84,6 +99,8 @@ export const AuthProvider = ({ children }) => {
     login,
     logout,
   };
+
+  console.log('AuthProvider render - user:', user?.email, 'loading:', loading);
 
   return (
     <AuthContext.Provider value={value}>

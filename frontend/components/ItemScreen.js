@@ -1,4 +1,4 @@
-// frontend/components/ItemScreen.js - FIXED PERMISSION ISSUE
+// frontend/components/ItemScreen.js - FULLY FIXED
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where } from 'firebase/firestore';
@@ -24,7 +24,6 @@ export default function ItemScreen({ theme, darkMode }) {
 
     console.log('📦 Loading products for user:', user.uid);
 
-    // IMPORTANT: Must use where clause to match security rules
     const q = query(
       collection(db, 'products'),
       where('userId', '==', user.uid)
@@ -66,7 +65,7 @@ export default function ItemScreen({ theme, darkMode }) {
         
         await updateDoc(doc(db, 'products', editingProduct.id), {
           ...productData,
-          userId: user.uid, // Ensure userId is set
+          userId: user.uid,
           updatedAt: new Date().toISOString(),
         });
         
@@ -77,7 +76,7 @@ export default function ItemScreen({ theme, darkMode }) {
         
         await addDoc(collection(db, 'products'), {
           ...productData,
-          userId: user.uid, // Must include userId
+          userId: user.uid,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         });
@@ -87,6 +86,7 @@ export default function ItemScreen({ theme, darkMode }) {
       }
       
       setEditingProduct(null);
+      setModalVisible(false);
     } catch (error) {
       console.error('❌ Save error:', error.code, error.message);
       Alert.alert('Error', `Failed to save: ${error.message}`);
@@ -94,31 +94,36 @@ export default function ItemScreen({ theme, darkMode }) {
     }
   };
 
-  const handleDeleteProduct = async (productId) => {
+  const handleDeleteProduct = async (productId, productName) => {
     if (!user) {
       Alert.alert('Error', 'You must be logged in');
       return;
     }
 
+    console.log('🗑️ Starting delete process for:', productId);
+
     try {
-      console.log('🗑️ Deleting:', productId);
-      
+      console.log('Calling deleteDoc...');
       await deleteDoc(doc(db, 'products', productId));
       
-      console.log('✅ Deleted successfully');
-      // Don't show alert here - card already shows confirmation
+      console.log('✅ Product deleted successfully from Firestore');
+      // Alert moved to ItemCard
     } catch (error) {
-      console.error('❌ Delete error:', error.code, error.message);
-      Alert.alert('Error', `Failed to delete: ${error.message}`);
+      console.error('❌ Delete error:', error);
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+      Alert.alert('Delete Failed', `Could not delete product: ${error.message}`);
     }
   };
 
   const handleAddProduct = () => {
+    console.log('➕ Add product clicked');
     setEditingProduct(null);
     setModalVisible(true);
   };
 
   const handleEditProduct = (product) => {
+    console.log('✏️ Edit product clicked:', product.id);
     setEditingProduct(product);
     setModalVisible(true);
   };
@@ -181,8 +186,14 @@ export default function ItemScreen({ theme, darkMode }) {
                 key={product.id}
                 product={product}
                 theme={theme}
-                onEdit={() => handleEditProduct(product)}
-                onDelete={() => handleDeleteProduct(product.id)}
+                onEdit={() => {
+                  console.log('ItemCard onEdit called for:', product.id);
+                  handleEditProduct(product);
+                }}
+                onDelete={() => {
+                  console.log('ItemCard onDelete called for:', product.id);
+                  handleDeleteProduct(product.id, product.name);
+                }}
               />
             ))}
           </View>
@@ -192,6 +203,7 @@ export default function ItemScreen({ theme, darkMode }) {
       <AddProductModal
         visible={modalVisible}
         onClose={() => {
+          console.log('Modal closed');
           setModalVisible(false);
           setEditingProduct(null);
         }}

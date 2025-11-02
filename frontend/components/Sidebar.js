@@ -1,8 +1,7 @@
-// frontend/components/Sidebar.js - DEBUG LOGOUT
+// frontend/components/Sidebar.js - TEST VERSION (NO ALERT)
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Alert, Platform } from 'react-native';
-import { signOut } from 'firebase/auth';
-import { auth } from '../services/firebase';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Platform } from 'react-native';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Sidebar({ 
   isOpen, 
@@ -15,6 +14,7 @@ export default function Sidebar({
   user 
 }) {
   const slideAnim = React.useRef(new Animated.Value(isOpen ? 0 : -280)).current;
+  const { logout } = useAuth();
 
   React.useEffect(() => {
     Animated.timing(slideAnim, {
@@ -24,50 +24,42 @@ export default function Sidebar({
     }).start();
   }, [isOpen]);
 
-  const handleLogout = () => {
-    console.log('=== LOGOUT CLICKED ===');
+  const handleLogout = async () => {
+    console.log('=== LOGOUT CLICKED - DIRECT CALL (NO ALERT) ===');
     console.log('Current user:', user?.email);
-    console.log('Auth object:', auth);
-    console.log('Auth currentUser:', auth.currentUser?.email);
+    console.log('Logout function exists?', !!logout);
+    console.log('Logout type:', typeof logout);
     
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { 
-          text: 'Cancel', 
-          style: 'cancel',
-          onPress: () => console.log('Logout cancelled')
-        },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            console.log('=== STARTING LOGOUT ===');
-            
-            try {
-              console.log('Calling signOut...');
-              await signOut(auth);
-              
-              console.log('✅ signOut completed');
-              
-              // Force reload
-              console.log('Forcing reload...');
-              if (Platform.OS === 'web') {
-                window.location.href = window.location.origin;
-              }
-            } catch (error) {
-              console.error('=== LOGOUT ERROR ===');
-              console.error('Error:', error);
-              console.error('Error code:', error.code);
-              console.error('Error message:', error.message);
-              Alert.alert('Logout Failed', error.message);
-            }
-          }
+    if (!logout) {
+      console.error('❌ logout is null/undefined');
+      return;
+    }
+    
+    // DIRECT CALL - NO CONFIRMATION
+    console.log('Calling logout() directly...');
+    try {
+      const result = await logout();
+      console.log('Logout result:', result);
+      
+      if (result && result.success) {
+        console.log('✅ Logout successful!');
+        
+        // Force reload on web
+        if (Platform.OS === 'web') {
+          console.log('Reloading page in 100ms...');
+          setTimeout(() => {
+            console.log('NOW reloading...');
+            window.location.reload();
+          }, 100);
         }
-      ],
-      { cancelable: false }
-    );
+      } else {
+        console.error('❌ Logout returned failure:', result?.error);
+      }
+    } catch (error) {
+      console.error('❌ Exception during logout:', error);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+    }
   };
 
   const getUserInitials = () => {
@@ -192,7 +184,7 @@ export default function Sidebar({
             activeOpacity={0.7}
           >
             <Text style={styles.logoutIcon}>🚪</Text>
-            <Text style={styles.logoutText}>Logout</Text>
+            <Text style={styles.logoutText}>Logout (TEST)</Text>
           </TouchableOpacity>
         </View>
       </Animated.View>
