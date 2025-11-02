@@ -1,4 +1,4 @@
-// frontend/components/RecipeScreen.js - FIXED VERSION
+// frontend/components/RecipeScreen.js - FINAL FIXED VERSION
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -10,7 +10,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { collection, onSnapshot, query, where, addDoc, orderBy, limit } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, addDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { generateRecipes, getRecipeDetails } from '../services/api';
@@ -29,10 +29,10 @@ export default function RecipeScreen({ theme, darkMode }) {
   
   const { user } = useAuth();
 
-  // Load products from Firestore (only user's products)
+  // Load products from Firestore
   useEffect(() => {
     if (!user) {
-      console.log('📝 No user logged in, skipping product load');
+      console.log('📝 No user logged in');
       setLoadingProducts(false);
       return;
     }
@@ -40,45 +40,35 @@ export default function RecipeScreen({ theme, darkMode }) {
     console.log('📦 Loading products for user:', user.uid);
     setLoadingProducts(true);
 
-    try {
-      const q = query(
-        collection(db, 'products'),
-        where('userId', '==', user.uid)
-      );
+    const q = query(
+      collection(db, 'products'),
+      where('userId', '==', user.uid)
+    );
 
-      const unsubscribe = onSnapshot(
-        q,
-        (snapshot) => {
-          const productList = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }));
-          console.log('✅ Loaded', productList.length, 'products');
-          setProducts(productList);
-          setLoadingProducts(false);
-        },
-        (error) => {
-          console.error('❌ Error loading products:', error);
-          console.error('Error code:', error.code);
-          console.error('Error message:', error.message);
-          setLoadingProducts(false);
-        }
-      );
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const productList = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        console.log('✅ Loaded', productList.length, 'products');
+        setProducts(productList);
+        setLoadingProducts(false);
+      },
+      (error) => {
+        console.error('❌ Error loading products:', error);
+        setLoadingProducts(false);
+      }
+    );
 
-      return () => {
-        console.log('🧹 Cleaning up products listener');
-        unsubscribe();
-      };
-    } catch (error) {
-      console.error('❌ Error setting up products listener:', error);
-      setLoadingProducts(false);
-    }
+    return () => unsubscribe();
   }, [user]);
 
-  // Load recipe history (only user's history)
+  // Load recipe history - WITHOUT orderBy to avoid index requirement
   useEffect(() => {
     if (!user) {
-      console.log('📝 No user logged in, skipping history load');
+      console.log('📝 No user logged in');
       setLoadingHistory(false);
       return;
     }
@@ -86,79 +76,39 @@ export default function RecipeScreen({ theme, darkMode }) {
     console.log('📜 Loading recipe history for user:', user.uid);
     setLoadingHistory(true);
 
-    try {
-      const q = query(
-        collection(db, 'recipeHistory'),
-        where('userId', '==', user.uid),
-        orderBy('createdAt', 'desc'),
-        limit(10)
-      );
+    // Simple query without orderBy - no index needed!
+    const q = query(
+      collection(db, 'recipeHistory'),
+      where('userId', '==', user.uid)
+    );
 
-      const unsubscribe = onSnapshot(
-        q,
-        (snapshot) => {
-          const history = snapshot.docs.map(doc => ({
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const history = snapshot.docs
+          .map(doc => ({
             id: doc.id,
             ...doc.data()
-          }));
-          console.log('✅ Loaded', history.length, 'recipe history items');
-          setRecipeHistory(history);
-          setLoadingHistory(false);
-        },
-        (error) => {
-          console.error('❌ Error loading recipe history:', error);
-          console.error('Error code:', error.code);
-          console.error('Error message:', error.message);
-          
-          // If orderBy fails (index not created), try without ordering
-          if (error.code === 'failed-precondition') {
-            console.log('⚠️ Firestore index missing, loading without ordering...');
-            
-            const simpleQuery = query(
-              collection(db, 'recipeHistory'),
-              where('userId', '==', user.uid),
-              limit(10)
-            );
-            
-            const simpleUnsubscribe = onSnapshot(
-              simpleQuery,
-              (snapshot) => {
-                const history = snapshot.docs
-                  .map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                  }))
-                  .sort((a, b) => {
-                    const dateA = new Date(a.createdAt || 0);
-                    const dateB = new Date(b.createdAt || 0);
-                    return dateB - dateA;
-                  })
-                  .slice(0, 10);
-                console.log('✅ Loaded', history.length, 'recipe history items (without index)');
-                setRecipeHistory(history);
-                setLoadingHistory(false);
-              },
-              (simpleError) => {
-                console.error('❌ Error with simple query:', simpleError);
-                setLoadingHistory(false);
-              }
-            );
-            
-            return () => simpleUnsubscribe();
-          } else {
-            setLoadingHistory(false);
-          }
-        }
-      );
+          }))
+          // Sort in JavaScript instead
+          .sort((a, b) => {
+            const dateA = new Date(a.createdAt || 0);
+            const dateB = new Date(b.createdAt || 0);
+            return dateB - dateA;
+          })
+          .slice(0, 10); // Keep only latest 10
+        
+        console.log('✅ Loaded', history.length, 'recipe history items');
+        setRecipeHistory(history);
+        setLoadingHistory(false);
+      },
+      (error) => {
+        console.error('❌ Error loading recipe history:', error);
+        setLoadingHistory(false);
+      }
+    );
 
-      return () => {
-        console.log('🧹 Cleaning up recipe history listener');
-        unsubscribe();
-      };
-    } catch (error) {
-      console.error('❌ Error setting up history listener:', error);
-      setLoadingHistory(false);
-    }
+    return () => unsubscribe();
   }, [user]);
 
   const toggleItem = (itemId) => {
@@ -220,16 +170,25 @@ export default function RecipeScreen({ theme, darkMode }) {
       if (response.success && response.recipe) {
         setSelectedRecipe(response.recipe);
         
-        // Save to history (with userId)
+        // Save COMPLETE recipe to history
         if (user) {
           try {
-            await addDoc(collection(db, 'recipeHistory'), {
+            const historyData = {
               name: recipe.name,
-              ingredients: ingredientNames,
+              ingredients: response.recipe.ingredients || [],
+              steps: response.recipe.steps || [],
+              prepTime: response.recipe.prepTime || '',
+              cookTime: response.recipe.cookTime || '',
+              servings: response.recipe.servings || '',
+              description: recipe.description || '',
+              difficulty: recipe.difficulty || '',
+              time: recipe.time || '',
               userId: user.uid,
               createdAt: new Date().toISOString()
-            });
-            console.log('✅ Saved recipe to history');
+            };
+            
+            await addDoc(collection(db, 'recipeHistory'), historyData);
+            console.log('✅ Saved COMPLETE recipe to history');
           } catch (historyError) {
             console.error('❌ Failed to save recipe history:', historyError);
           }
@@ -243,6 +202,22 @@ export default function RecipeScreen({ theme, darkMode }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleViewHistoryRecipe = (historyItem) => {
+    console.log('📖 Viewing recipe from history:', historyItem.name);
+    
+    // Set the selected recipe from history data
+    setSelectedRecipe({
+      name: historyItem.name,
+      ingredients: historyItem.ingredients || [],
+      steps: historyItem.steps || [],
+      prepTime: historyItem.prepTime || 'N/A',
+      cookTime: historyItem.cookTime || 'N/A',
+      servings: historyItem.servings || 'N/A'
+    });
+    
+    setShowHistory(false);
   };
 
   const renderIngredientSelection = () => (
@@ -376,25 +351,37 @@ export default function RecipeScreen({ theme, darkMode }) {
       <Text style={[styles.subtitle, { color: theme.text }]}>
         Ingredients:
       </Text>
-      {selectedRecipe.ingredients.map((ingredient, index) => (
-        <Text key={index} style={[styles.listItem, { color: theme.text }]}>
-          • {ingredient}
+      {selectedRecipe.ingredients && selectedRecipe.ingredients.length > 0 ? (
+        selectedRecipe.ingredients.map((ingredient, index) => (
+          <Text key={index} style={[styles.listItem, { color: theme.text }]}>
+            • {ingredient}
+          </Text>
+        ))
+      ) : (
+        <Text style={[styles.emptyText, { color: theme.textMuted }]}>
+          No ingredients listed
         </Text>
-      ))}
+      )}
 
       <Text style={[styles.subtitle, { color: theme.text }]}>
         Instructions:
       </Text>
-      {selectedRecipe.steps.map((step, index) => (
-        <View key={index} style={styles.stepContainer}>
-          <Text style={[styles.stepNumber, { color: theme.primary }]}>
-            {index + 1}.
-          </Text>
-          <Text style={[styles.stepText, { color: theme.text }]}>
-            {step}
-          </Text>
-        </View>
-      ))}
+      {selectedRecipe.steps && selectedRecipe.steps.length > 0 ? (
+        selectedRecipe.steps.map((step, index) => (
+          <View key={index} style={styles.stepContainer}>
+            <Text style={[styles.stepNumber, { color: theme.primary }]}>
+              {index + 1}.
+            </Text>
+            <Text style={[styles.stepText, { color: theme.text }]}>
+              {step}
+            </Text>
+          </View>
+        ))
+      ) : (
+        <Text style={[styles.emptyText, { color: theme.textMuted }]}>
+          No instructions available
+        </Text>
+      )}
     </View>
   );
 
@@ -429,9 +416,10 @@ export default function RecipeScreen({ theme, darkMode }) {
         </View>
       ) : (
         recipeHistory.map((recipe) => (
-          <View
+          <TouchableOpacity
             key={recipe.id}
             style={[styles.historyCard, { backgroundColor: theme.card, borderColor: theme.border }]}
+            onPress={() => handleViewHistoryRecipe(recipe)}
           >
             <Text style={[styles.recipeName, { color: theme.text }]}>
               {recipe.name}
@@ -439,10 +427,20 @@ export default function RecipeScreen({ theme, darkMode }) {
             <Text style={[styles.historyDate, { color: theme.textMuted }]}>
               {recipe.createdAt ? new Date(recipe.createdAt).toLocaleDateString() : 'Unknown date'}
             </Text>
-            <Text style={[styles.historyIngredients, { color: theme.textMuted }]}>
-              {recipe.ingredients?.join(', ') || 'No ingredients listed'}
+            {recipe.time && recipe.difficulty && (
+              <Text style={[styles.historyInfo, { color: theme.textMuted }]}>
+                {recipe.time} • {recipe.difficulty}
+              </Text>
+            )}
+            {recipe.description && (
+              <Text style={[styles.historyDescription, { color: theme.textMuted }]} numberOfLines={2}>
+                {recipe.description}
+              </Text>
+            )}
+            <Text style={[styles.viewDetailsText, { color: theme.primary }]}>
+              Tap to view full recipe →
             </Text>
-          </View>
+          </TouchableOpacity>
         ))
       )}
     </View>
@@ -659,7 +657,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 4,
   },
-  historyIngredients: {
+  historyInfo: {
     fontSize: 14,
+    marginBottom: 4,
+  },
+  historyDescription: {
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  viewDetailsText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 4,
   },
 });

@@ -1,13 +1,10 @@
-// frontend/contexts/AuthContext.js - FIXED VERSION
+// frontend/contexts/AuthContext.js - FINAL FIXED VERSION
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword,
   signOut,
-  onAuthStateChanged,
-  setPersistence,
-  browserLocalPersistence,
-  browserSessionPersistence
+  onAuthStateChanged
 } from 'firebase/auth';
 import { auth } from '../services/firebase';
 
@@ -21,17 +18,6 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     console.log('🔐 Setting up auth listener...');
-    
-    // Set persistence to LOCAL (you can change to SESSION if you want)
-    // LOCAL = persists even after browser close
-    // SESSION = persists only during browser session
-    setPersistence(auth, browserLocalPersistence)
-      .then(() => {
-        console.log('✅ Auth persistence set to LOCAL');
-      })
-      .catch((error) => {
-        console.error('❌ Failed to set persistence:', error);
-      });
     
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -73,23 +59,22 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = async () => {
-    try {
-      console.log('🚪 Attempting logout...');
-      console.log('Current user before logout:', user?.email);
+  const logout = () => {
+    return new Promise((resolve) => {
+      console.log('🚪 Logout called');
+      console.log('Current user:', user?.email);
       
-      // Sign out from Firebase
-      await signOut(auth);
-      
-      // Force clear user state
-      setUser(null);
-      
-      console.log('✅ Logout successful - user state cleared');
-      return { success: true };
-    } catch (error) {
-      console.error('❌ Logout error:', error);
-      return { success: false, error: error.message };
-    }
+      signOut(auth)
+        .then(() => {
+          console.log('✅ Firebase signOut successful');
+          setUser(null);
+          resolve({ success: true });
+        })
+        .catch((error) => {
+          console.error('❌ Logout error:', error);
+          resolve({ success: false, error: error.message });
+        });
+    });
   };
 
   const value = {

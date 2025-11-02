@@ -1,4 +1,4 @@
-// backend/routes/recipe.js
+// backend/routes/recipe.js - OPTIMIZED FOR SPEED
 const express = require('express');
 const router = express.Router();
 const { GoogleGenerativeAI } = require('@google/generative-ai');
@@ -11,7 +11,6 @@ router.post('/generate', async (req, res) => {
   try {
     const { ingredients, customIngredients } = req.body;
 
-    // Validate input
     if (!ingredients || ingredients.length === 0) {
       return res.status(400).json({ 
         error: 'No ingredients provided',
@@ -19,7 +18,6 @@ router.post('/generate', async (req, res) => {
       });
     }
 
-    // Combine all ingredients
     const allIngredients = [...ingredients];
     if (customIngredients && customIngredients.length > 0) {
       allIngredients.push(...customIngredients);
@@ -28,9 +26,9 @@ router.post('/generate', async (req, res) => {
     const ingredientList = allIngredients.join(', ');
     console.log('🍳 Generating recipes for:', ingredientList);
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
+    // FASTEST: gemini-2.0-flash-exp (best speed/quality balance)
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
 
-    
     const prompt = `You are a creative chef. Generate 3 different recipe ideas using these ingredients: ${ingredientList}
 
 For each recipe provide:
@@ -55,19 +53,16 @@ Return ONLY a valid JSON array with this exact structure:
     const response = await result.response;
     let text = response.text();
     
-    // Clean up response
     text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     
     let recipes;
     try {
       recipes = JSON.parse(text);
       
-      // Ensure it's an array
       if (!Array.isArray(recipes)) {
         recipes = [recipes];
       }
       
-      // Validate recipe structure
       recipes = recipes.map((recipe, index) => ({
         id: `recipe_${Date.now()}_${index}`,
         name: recipe.name || `Recipe ${index + 1}`,
@@ -78,7 +73,6 @@ Return ONLY a valid JSON array with this exact structure:
       
     } catch (parseError) {
       console.error('Failed to parse Gemini response:', text);
-      // Fallback recipes
       recipes = [
         {
           id: `recipe_${Date.now()}_1`,
@@ -135,7 +129,8 @@ router.post('/details', async (req, res) => {
     const ingredientList = ingredients ? ingredients.join(', ') : 'available ingredients';
     console.log('📖 Getting recipe details for:', recipeName);
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
+    // FASTEST: gemini-2.0-flash-exp (2-3x faster than gemini-2.5-pro)
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
     
     const prompt = `Create a detailed recipe for "${recipeName}" using these ingredients: ${ingredientList}
 
@@ -164,14 +159,12 @@ Return ONLY valid JSON with this exact structure:
     const response = await result.response;
     let text = response.text();
     
-    // Clean up response
     text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     
     let recipeDetails;
     try {
       recipeDetails = JSON.parse(text);
       
-      // Ensure required fields
       if (!recipeDetails.ingredients) {
         recipeDetails.ingredients = ['Main ingredients as needed'];
       }
@@ -181,7 +174,6 @@ Return ONLY valid JSON with this exact structure:
       
     } catch (parseError) {
       console.error('Failed to parse Gemini response:', text);
-      // Fallback recipe
       recipeDetails = {
         ingredients: [
           '2 cups main ingredient',
