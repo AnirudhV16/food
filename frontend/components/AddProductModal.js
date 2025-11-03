@@ -1,4 +1,4 @@
-// frontend/components/AddProductModal.js - FIXED SAVE
+// frontend/components/AddProductModal.js - FIXED MOBILE + FASTER
 import React, { useState } from 'react';
 import {
   View,
@@ -11,6 +11,7 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  Image,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { analyzeImages, rateProduct } from '../services/api';
@@ -46,46 +47,74 @@ export default function AddProductModal({ visible, onClose, onSave, editProduct,
     }
   }, [visible, editProduct]);
 
-  const pickImages = async () => {
+  const pickFromGallery = async () => {
     try {
+      // Request permission
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Needed', 'Please grant photo library permissions');
+        Alert.alert('Permission Required', 'Please allow access to your photo library');
+        return;
+      }
+
+      // Check how many images already selected
+      const remainingSlots = 4 - selectedImages.length;
+      if (remainingSlots <= 0) {
+        Alert.alert('Limit Reached', 'You can only select up to 4 images');
         return;
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsMultipleSelection: true,
-        quality: 0.8,
+        selectionLimit: remainingSlots,
+        quality: 0.7, // Reduced quality for faster upload
       });
 
       if (!result.canceled && result.assets) {
-        setSelectedImages(result.assets);
+        const newImages = result.assets.slice(0, remainingSlots);
+        setSelectedImages([...selectedImages, ...newImages]);
+        console.log(`✅ Added ${newImages.length} image(s) from gallery`);
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to pick images');
+      console.error('Gallery error:', error);
+      Alert.alert('Error', 'Failed to pick images from gallery');
     }
   };
 
   const takePhoto = async () => {
     try {
+      // Check limit
+      if (selectedImages.length >= 4) {
+        Alert.alert('Limit Reached', 'You can only select up to 4 images');
+        return;
+      }
+
+      // Request permission
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Needed', 'Please grant camera permissions');
+        Alert.alert('Permission Required', 'Please allow access to your camera');
         return;
       }
 
       const result = await ImagePicker.launchCameraAsync({
-        quality: 0.8,
+        quality: 0.7, // Reduced quality for faster processing
+        allowsEditing: false,
       });
 
-      if (!result.canceled && result.assets) {
+      if (!result.canceled && result.assets && result.assets[0]) {
         setSelectedImages([...selectedImages, result.assets[0]]);
+        console.log('✅ Photo captured');
       }
     } catch (error) {
+      console.error('Camera error:', error);
       Alert.alert('Error', 'Failed to take photo');
     }
+  };
+
+  const removeImage = (index) => {
+    const newImages = selectedImages.filter((_, i) => i !== index);
+    setSelectedImages(newImages);
+    console.log(`Removed image ${index + 1}`);
   };
 
   const handleAnalyzeImages = async () => {
@@ -97,7 +126,7 @@ export default function AddProductModal({ visible, onClose, onSave, editProduct,
     setAnalyzing(true);
 
     try {
-      console.log('🔍 Analyzing images...');
+      console.log('🔍 Analyzing', selectedImages.length, 'image(s)...');
       
       let imageFiles;
       if (Platform.OS === 'web') {
@@ -109,6 +138,7 @@ export default function AddProductModal({ visible, onClose, onSave, editProduct,
           })
         );
       } else {
+        // Mobile: proper format
         imageFiles = selectedImages.map((asset, index) => ({
           uri: asset.uri,
           type: 'image/jpeg',
@@ -117,10 +147,10 @@ export default function AddProductModal({ visible, onClose, onSave, editProduct,
       }
 
       const analysisResponse = await analyzeImages(imageFiles);
-      console.log('📊 Analysis:', analysisResponse);
+      console.log('📊 Analysis response:', analysisResponse.success);
 
       if (!analysisResponse.success || !analysisResponse.data) {
-        Alert.alert('Analysis Failed', 'Could not extract product information');
+        Alert.alert('Analysis Failed', analysisResponse.message || 'Could not extract information');
         setAnalyzing(false);
         return;
       }
@@ -174,15 +204,13 @@ export default function AddProductModal({ visible, onClose, onSave, editProduct,
 
     } catch (error) {
       console.error('Analysis error:', error);
-      Alert.alert('Error', 'Failed to analyze images');
+      Alert.alert('Error', error.message || 'Failed to analyze images');
     } finally {
       setAnalyzing(false);
     }
   };
 
   const handleSave = async () => {
-    console.log('💾 Attempting to save...');
-    
     if (!productName.trim()) {
       Alert.alert('Missing Info', 'Please enter product name');
       return;
@@ -213,15 +241,11 @@ export default function AddProductModal({ visible, onClose, onSave, editProduct,
       healthSummary: analyzedData?.healthSummary || '',
     };
 
-    console.log('Product data to save:', productData);
-
     try {
       await onSave(productData);
-      console.log('✅ Save completed');
       onClose();
     } catch (error) {
-      console.error('❌ Save error:', error);
-      // Error already shown by parent component
+      console.error('Save error:', error);
     }
   };
 
@@ -243,35 +267,55 @@ export default function AddProductModal({ visible, onClose, onSave, editProduct,
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalBody}>
+          <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
             {/* Image Upload */}
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: theme.text }]}>
-                📸 Product Images
+                📸 Product Images (Max 4)
               </Text>
               <Text style={[styles.sectionDesc, { color: theme.textMuted }]}>
                 Take clear photos of ingredient labels
               </Text>
               
               <View style={styles.imageButtons}>
-                <TouchableOpacity style={styles.imageButton} onPress={pickImages}>
+                <TouchableOpacity 
+                  style={styles.imageButton} 
+                  onPress={takePhoto}
+                  disabled={selectedImages.length >= 4}
+                >
+                  <Text style={styles.imageButtonIcon}>📸</Text>
+                  <Text style={styles.imageButtonText}>Camera</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={styles.imageButton} 
+                  onPress={pickFromGallery}
+                  disabled={selectedImages.length >= 4}
+                >
                   <Text style={styles.imageButtonIcon}>📷</Text>
                   <Text style={styles.imageButtonText}>Gallery</Text>
                 </TouchableOpacity>
-
-                {Platform.OS !== 'web' && (
-                  <TouchableOpacity style={styles.imageButton} onPress={takePhoto}>
-                    <Text style={styles.imageButtonIcon}>📸</Text>
-                    <Text style={styles.imageButtonText}>Camera</Text>
-                  </TouchableOpacity>
-                )}
               </View>
 
+              {/* Image Preview */}
               {selectedImages.length > 0 && (
-                <View style={styles.imageCount}>
+                <View style={styles.imagePreviewContainer}>
                   <Text style={[styles.imageCountText, { color: theme.text }]}>
-                    ✓ {selectedImages.length} image(s)
+                    {selectedImages.length}/4 images selected
                   </Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    {selectedImages.map((image, index) => (
+                      <View key={index} style={styles.imagePreview}>
+                        <Image source={{ uri: image.uri }} style={styles.previewImage} />
+                        <TouchableOpacity 
+                          style={styles.removeImageButton}
+                          onPress={() => removeImage(index)}
+                        >
+                          <Text style={styles.removeImageText}>✕</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </ScrollView>
                 </View>
               )}
 
@@ -291,7 +335,7 @@ export default function AddProductModal({ visible, onClose, onSave, editProduct,
                     </Text>
                   </>
                 ) : (
-                  <Text style={styles.buttonText}>🔍 Analyze</Text>
+                  <Text style={styles.buttonText}>🔍 Analyze Images</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -483,15 +527,39 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#374151',
   },
-  imageCount: {
-    padding: 12,
-    backgroundColor: '#DBEAFE',
-    borderRadius: 8,
+  imagePreviewContainer: {
     marginBottom: 12,
   },
   imageCountText: {
     fontSize: 14,
     fontWeight: '500',
+    marginBottom: 8,
+  },
+  imagePreview: {
+    position: 'relative',
+    marginRight: 8,
+  },
+  previewImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+  },
+  removeImageButton: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#DC2626',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  removeImageText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   analyzeButton: {
     backgroundColor: '#3B82F6',
