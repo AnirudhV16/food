@@ -65,7 +65,7 @@ class NotificationService {
     const lastWeeklyCheck = userDoc.data()?.lastWeeklyCheck || null;
     const notificationHistory = userDoc.data()?.notificationHistory || {};
 
-    // Check if we should send weekly summary
+    // Send weekly reminder (every 7 days, regardless of expiring items)
     const shouldSendWeekly = this.shouldSendWeeklyNotification(lastWeeklyCheck);
 
     if (shouldSendWeekly) {
@@ -73,6 +73,7 @@ class NotificationService {
       await db.collection('users').doc(userId).update({
         lastWeeklyCheck: today.toISOString()
       });
+      console.log(`  ✅ Sent weekly reminder to user ${userId}`);
     }
 
     // Check each product for expiry notifications
@@ -108,26 +109,18 @@ class NotificationService {
   }
 
   /**
-   * Send weekly summary notification
+   * Send weekly reminder notification
+   * Simple reminder to check food items - sent every 7 days
    */
   async sendWeeklySummary(fcmToken, products) {
-    const expiringSoon = products.filter(p => {
-      const days = this.getDaysUntilExpiry(p.expDate);
-      return days >= 0 && days <= 7;
-    });
-
-    if (expiringSoon.length === 0) {
-      return; // No items expiring soon, skip notification
-    }
-
     const message = {
       notification: {
-        title: '🗓️ Weekly Food Check',
-        body: `You have ${expiringSoon.length} item(s) expiring within 7 days!`
+        title: '🗓️ Weekly Reminder',
+        body: 'Time to check your food items! Review what\'s in your inventory.'
       },
       data: {
-        type: 'weekly_summary',
-        count: expiringSoon.length.toString()
+        type: 'weekly_reminder',
+        totalItems: products.length.toString()
       },
       token: fcmToken
     };

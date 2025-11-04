@@ -1,234 +1,179 @@
-// backend/services/notificationService.js
-const admin = require('firebase-admin');
-const { db } = require('./firebase'); // You'll need to export db from server.js
+// frontend/services/notificationService.js
+import * as Notifications from 'expo-notifications';
+import * as Device from 'expo-device';
+import { Platform } from 'react-native';
+import { doc, setDoc } from 'firebase/firestore';
+import { db } from './firebase';
+
+// Configure notification behavior
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
 
 class NotificationService {
   constructor() {
-    this.isInitialized = admin.apps.length > 0;
+    this.notificationListener = null;
+    this.responseListener = null;
   }
 
   /**
-   * Schedule notification checks
-   * Run this periodically (e.g., every 6 hours)
+   * Register for push notifications
+   * Call this when user logs in
    */
-  async checkAndSendExpiryNotifications() {
-    if (!this.isInitialized) {
-      console.warn('Firebase Admin not initialized');
-      return;
-    }
-
+  async registerForPushNotifications(userId) {
     try {
-      console.log('🔔 Checking for expiry notifications...');
-      
-      // Get all users
-      const usersSnapshot = await db.collection('users').get();
-      
-      for (const userDoc of usersSnapshot.docs) {
-        const userId = userDoc.id;
-        const userData = userDoc.data();
-        const fcmToken = userData.fcmToken;
+      console.log('📱 Registering for push notifications...');
 
-        if (!fcmToken) {
-          console.log(`⚠️ User ${userId} has no FCM token`);
-          continue;
-        }
-
-        // Get user's products
-        const productsSnapshot = await db
-          .collection('products')
-          .where('userId', '==', userId)
-          .get();
-
-        const products = productsSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-
-        await this.processUserNotifications(userId, fcmToken, products);
+      if (!Device.isDevice) {
+        console.warn('⚠️ Push notifications only work on physical devices');
+        return null;
       }
 
-      console.log('✅ Notification check complete');
+      // Request permissions
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+
+      if (finalStatus !== 'granted') {
+        console.warn('⚠️ Permission not granted for notifications');
+        return null;
+      }
+
+      console.log('✅ Notification permissions granted');
+
+      // Get Expo push token
+      const token = (await Notifications.getExpoPushTokenAsync()).data;
+      console.log('📱 Expo Push Token:', token);
+
+      // Save token to Firestore
+      await this.saveTokenToFirestore(userId, token);
+
+      // Configure Android channel
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'default',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#3B82F6',
+        });
+      }
+
+      return token;
     } catch (error) {
-      console.error('❌ Error in notification check:', error);
+      console.error('❌ Error registering for notifications:', error);
+      return null;
     }
   }
 
   /**
-   * Process notifications for a single user
+   * Save FCM token to Firestore
    */
-  async processUserNotifications(userId, fcmToken, products) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    // Get user's last notification timestamps
-    const userDoc = await db.collection('users').doc(userId).get();
-    const lastWeeklyCheck = userDoc.data()?.lastWeeklyCheck || null;
-    const notificationHistory = userDoc.data()?.notificationHistory || {};
-
-    // Check if we should send weekly summary
-    const shouldSendWeekly = this.shouldSendWeeklyNotification(lastWeeklyCheck);
-
-    if (shouldSendWeekly) {
-      await this.sendWeeklySummary(fcmToken, products);
-      await db.collection('users').doc(userId).update({
-        lastWeeklyCheck: today.toISOString()
-      });
-    }
-
-    // Check each product for expiry notifications
-    for (const product of products) {
-      const daysUntilExpiry = this.getDaysUntilExpiry(product.expDate);
+  async saveTokenToFirestore(userId, token) {
+    try {
+      console.log('💾 Saving token to Firestore...');
       
-      // 10-day warning (send once)
-      if (daysUntilExpiry === 10) {
-        const notificationKey = `${product.id}_10day`;
-        if (!notificationHistory[notificationKey]) {
-          await this.send10DayWarning(fcmToken, product);
-          notificationHistory[notificationKey] = new Date().toISOString();
-        }
-      }
+      await setDoc(
+        doc(db, 'users', userId),
+        {
+          fcmToken: token,
+          tokenUpdatedAt: new Date().toISOString(),
+          platform: Platform.OS,
+        },
+        { merge: true }
+      );
 
-      // 5-day to expiry: send daily
-      if (daysUntilExpiry >= 0 && daysUntilExpiry <= 5) {
-        const notificationKey = `${product.id}_${daysUntilExpiry}day`;
-        const lastSent = notificationHistory[notificationKey];
+      console.log('✅ Token saved to Firestore');
+    } catch (error) {
+      console.error('❌ Error saving token:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Set up notification listeners
+   */
+  setupNotificationListeners() {
+    console.log('🎧 Setting up notification listeners...');
+
+    // Notification received while app is foregrounded
+    this.notificationListener = Notifications.addNotificationReceivedListener(
+      (notification) => {
+        console.log('🔔 Notification received:', notification);
+        // You can show custom UI here
+      }
+    );
+
+    // User tapped on notification
+    this.responseListener = Notifications.addNotificationResponseReceivedListener(
+      (response) => {
+        console.log('👆 Notification tapped:', response);
+        const data = response.notification.request.content.data;
         
-        // Check if we sent this notification today already
-        if (!lastSent || !this.isSameDay(new Date(lastSent), today)) {
-          await this.sendDailyExpiryWarning(fcmToken, product, daysUntilExpiry);
-          notificationHistory[notificationKey] = new Date().toISOString();
+        // Handle navigation based on notification type
+        if (data.type === 'expiry_warning' || data.type === 'daily_expiry') {
+          // Navigate to Items tab
+          console.log('Navigate to product:', data.productId);
+        } else if (data.type === 'weekly_summary') {
+          // Navigate to Items tab
+          console.log('Navigate to items list');
         }
       }
+    );
+
+    console.log('✅ Notification listeners set up');
+  }
+
+  /**
+   * Clean up listeners
+   */
+  removeNotificationListeners() {
+    if (this.notificationListener) {
+      Notifications.removeNotificationSubscription(this.notificationListener);
     }
-
-    // Update notification history
-    await db.collection('users').doc(userId).update({
-      notificationHistory: notificationHistory
-    });
-  }
-
-  /**
-   * Send weekly reminder notification
-   * Simple reminder to check food items - sent every 7 days
-   */
-  async sendWeeklySummary(fcmToken, products) {
-    const message = {
-      notification: {
-        title: '🗓️ Weekly Reminder',
-        body: 'Time to check your food items! Review what\'s in your inventory.'
-      },
-      data: {
-        type: 'weekly_reminder',
-        totalItems: products.length.toString()
-      },
-      token: fcmToken
-    };
-
-    await this.sendNotification(message);
-  }
-
-  /**
-   * Send 10-day warning
-   */
-  async send10DayWarning(fcmToken, product) {
-    const message = {
-      notification: {
-        title: '⏰ Expiry Warning',
-        body: `${product.name} expires in 10 days`
-      },
-      data: {
-        type: 'expiry_warning',
-        productId: product.id,
-        daysLeft: '10'
-      },
-      token: fcmToken
-    };
-
-    await this.sendNotification(message);
-  }
-
-  /**
-   * Send daily expiry warning (0-5 days)
-   */
-  async sendDailyExpiryWarning(fcmToken, product, daysLeft) {
-    let title, body;
-
-    if (daysLeft === 0) {
-      title = '🚨 Expires Today!';
-      body = `${product.name} expires TODAY!`;
-    } else if (daysLeft === 1) {
-      title = '⚠️ Expires Tomorrow';
-      body = `${product.name} expires tomorrow!`;
-    } else {
-      title = '⏰ Expiring Soon';
-      body = `${product.name} expires in ${daysLeft} days`;
+    if (this.responseListener) {
+      Notifications.removeNotificationSubscription(this.responseListener);
     }
-
-    const message = {
-      notification: { title, body },
-      data: {
-        type: 'daily_expiry',
-        productId: product.id,
-        daysLeft: daysLeft.toString()
-      },
-      token: fcmToken
-    };
-
-    await this.sendNotification(message);
+    console.log('🧹 Notification listeners removed');
   }
 
   /**
-   * Send notification via FCM
+   * Schedule a local notification (for testing)
    */
-  async sendNotification(message) {
+  async scheduleTestNotification() {
     try {
-      const response = await admin.messaging().send(message);
-      console.log('✅ Notification sent:', response);
-      return { success: true, messageId: response };
+      const id = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '🧪 Test Notification',
+          body: 'This is a test notification from AI Food Tracker',
+          data: { type: 'test' },
+        },
+        trigger: {
+          seconds: 2,
+        },
+      });
+
+      console.log('✅ Test notification scheduled:', id);
+      return id;
     } catch (error) {
-      console.error('❌ Failed to send notification:', error);
-      return { success: false, error: error.message };
+      console.error('❌ Error scheduling test notification:', error);
     }
   }
 
   /**
-   * Helper: Calculate days until expiry
+   * Cancel all scheduled notifications
    */
-  getDaysUntilExpiry(expDate) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const expiry = new Date(expDate);
-    expiry.setHours(0, 0, 0, 0);
-    
-    const diffTime = expiry - today;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    return diffDays;
-  }
-
-  /**
-   * Helper: Check if should send weekly notification
-   */
-  shouldSendWeeklyNotification(lastWeeklyCheck) {
-    if (!lastWeeklyCheck) return true;
-    
-    const lastCheck = new Date(lastWeeklyCheck);
-    const today = new Date();
-    
-    const daysDiff = Math.floor((today - lastCheck) / (1000 * 60 * 60 * 24));
-    
-    return daysDiff >= 7;
-  }
-
-  /**
-   * Helper: Check if two dates are same day
-   */
-  isSameDay(date1, date2) {
-    return date1.getFullYear() === date2.getFullYear() &&
-           date1.getMonth() === date2.getMonth() &&
-           date1.getDate() === date2.getDate();
+  async cancelAllNotifications() {
+    await Notifications.cancelAllScheduledNotificationsAsync();
+    console.log('🧹 All scheduled notifications cancelled');
   }
 }
 
-module.exports = new NotificationService();
+export default new NotificationService();
