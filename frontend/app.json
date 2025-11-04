@@ -80,7 +80,8 @@
       "icon": "./assets/notification-icon.png",
       "color": "#3B82F6",
       "androidMode": "default",
-      "androidCollapsedTitle": "{{unread_count}} new notifications"
+      "androidCollapsedTitle": "{{unread_count}} new notifications",
+      "vapidPublicKey": "BNWJYuxSyQIxOwVdcAaPmI1nEcaXS4n1hJYN0z6fG80AItES2jFfJlxy555Iyo_dWpI6fi9ue-y2C_ySqiaL4Ig"
     }
   }
 }

@@ -1,6 +1,6 @@
 // backend/services/notificationService.js
 const admin = require('firebase-admin');
-const { db } = require('./firebase'); // You'll need to export db from server.js
+const { db } = require('../server'); // CORRECT - imports from server.js
 
 class NotificationService {
   constructor() {
