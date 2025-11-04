@@ -1,4 +1,4 @@
-// backend/routes/analyze.js - FIXED IMAGE HANDLING
+// backend/routes/analyze.js - Updated to use environment variables
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
@@ -21,16 +21,40 @@ const upload = multer({
   }
 });
 
-// Initialize Google Vision client with better error handling
+// Initialize Google Vision client using environment variables
 let visionClient;
 try {
+  // Validate required environment variables
+  if (!process.env.GOOGLE_CLOUD_PROJECT_ID || 
+      !process.env.GOOGLE_CLOUD_PRIVATE_KEY || 
+      !process.env.GOOGLE_CLOUD_CLIENT_EMAIL) {
+    throw new Error('Missing required Google Cloud environment variables');
+  }
+
+  // Create credentials object from environment variables
+  const credentials = {
+    type: "service_account",
+    project_id: process.env.GOOGLE_CLOUD_PROJECT_ID,
+    private_key_id: process.env.GOOGLE_CLOUD_PRIVATE_KEY_ID,
+    private_key: process.env.GOOGLE_CLOUD_PRIVATE_KEY.replace(/\\n/g, '\n'), // Handle newlines
+    client_email: process.env.GOOGLE_CLOUD_CLIENT_EMAIL,
+    client_id: process.env.GOOGLE_CLOUD_CLIENT_ID,
+    auth_uri: process.env.GOOGLE_CLOUD_AUTH_URI || "https://accounts.google.com/o/oauth2/auth",
+    token_uri: process.env.GOOGLE_CLOUD_TOKEN_URI || "https://oauth2.googleapis.com/token",
+    auth_provider_x509_cert_url: process.env.GOOGLE_CLOUD_AUTH_PROVIDER_CERT_URL || "https://www.googleapis.com/oauth2/v1/certs",
+    client_x509_cert_url: process.env.GOOGLE_CLOUD_CLIENT_CERT_URL
+  };
+
   visionClient = new vision.ImageAnnotatorClient({
-    keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS || './serviceAccountKey.json'
+    credentials: credentials,
+    projectId: process.env.GOOGLE_CLOUD_PROJECT_ID
   });
-  console.log('✅ Google Vision API client initialized');
+  
+  console.log('✅ Google Vision API client initialized from environment variables');
+  console.log('   Project ID:', process.env.GOOGLE_CLOUD_PROJECT_ID);
 } catch (error) {
   console.error('❌ Failed to initialize Vision API:', error.message);
-  console.error('   Make sure serviceAccountKey.json exists in backend folder');
+  console.error('   Make sure all GOOGLE_CLOUD_* environment variables are set in .env');
 }
 
 // Initialize Gemini AI
@@ -48,7 +72,7 @@ router.post('/', upload.array('images', 4), async (req, res) => {
       console.error('❌ Vision API client not initialized');
       return res.status(500).json({
         error: 'Vision API not configured',
-        message: 'Google Cloud Vision API is not properly configured. Check server logs.'
+        message: 'Google Cloud Vision API is not properly configured. Check environment variables and server logs.'
       });
     }
 
@@ -279,13 +303,14 @@ router.get('/test', async (req, res) => {
       return res.status(500).json({
         status: 'error',
         message: 'Vision API client not initialized',
-        hint: 'Check serviceAccountKey.json in backend folder'
+        hint: 'Check GOOGLE_CLOUD_* environment variables in .env file'
       });
     }
 
     res.json({
       status: 'ok',
       message: 'Vision API is configured',
+      projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
       timestamp: new Date().toISOString()
     });
   } catch (error) {
