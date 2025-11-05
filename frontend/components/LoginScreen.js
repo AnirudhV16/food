@@ -1,4 +1,4 @@
-// frontend/components/LoginScreen.js - FIXED IMAGE UPLOAD
+// frontend/components/LoginScreen.js - NO PROFILE IMAGE UPLOAD
 import React, { useState } from 'react';
 import {
   View,
@@ -11,11 +11,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Image,
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../contexts/AuthContext';
-import permissionService from '../services/permissionService';
 
 export default function LoginScreen({ theme }) {
   const [email, setEmail] = useState('');
@@ -23,7 +20,6 @@ export default function LoginScreen({ theme }) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isSignup, setIsSignup] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [profileImage, setProfileImage] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
@@ -117,135 +113,7 @@ export default function LoginScreen({ theme }) {
     return true;
   };
 
-  // FIXED: Pick profile image from gallery
-  const pickFromGallery = async () => {
-    console.log('📷 pickFromGallery called');
-    
-    try {
-      // Check permission first
-      console.log('Checking photo library permission...');
-      const hasPermission = await permissionService.ensurePermission('photos', true);
-      
-      if (!hasPermission) {
-        console.log('❌ Permission denied');
-        Alert.alert('Permission Required', 'Please allow photo library access in settings');
-        return;
-      }
-      
-      console.log('✅ Permission granted, launching image picker...');
 
-      // Launch image picker
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.5,
-      });
-
-      console.log('Image picker result:', result);
-
-      if (!result.canceled && result.assets && result.assets[0]) {
-        const selectedImage = result.assets[0];
-        console.log('✅ Image selected:', {
-          uri: selectedImage.uri,
-          width: selectedImage.width,
-          height: selectedImage.height,
-          type: selectedImage.type
-        });
-        
-        setProfileImage(selectedImage);
-        Alert.alert('Success', 'Profile photo selected!');
-      } else {
-        console.log('Image picker cancelled');
-      }
-    } catch (error) {
-      console.error('❌ Error picking image:', error);
-      Alert.alert('Error', `Failed to select image: ${error.message}`);
-    }
-  };
-
-  // FIXED: Take profile photo with camera
-  const takeProfilePhoto = async () => {
-    console.log('📸 takeProfilePhoto called');
-    
-    try {
-      // Check permission first
-      console.log('Checking camera permission...');
-      const hasPermission = await permissionService.ensurePermission('camera', true);
-      
-      if (!hasPermission) {
-        console.log('❌ Permission denied');
-        Alert.alert('Permission Required', 'Please allow camera access in settings');
-        return;
-      }
-      
-      console.log('✅ Permission granted, launching camera...');
-
-      // Launch camera
-      const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.5,
-      });
-
-      console.log('Camera result:', result);
-
-      if (!result.canceled && result.assets && result.assets[0]) {
-        const selectedImage = result.assets[0];
-        console.log('✅ Photo taken:', {
-          uri: selectedImage.uri,
-          width: selectedImage.width,
-          height: selectedImage.height
-        });
-        
-        setProfileImage(selectedImage);
-        Alert.alert('Success', 'Photo captured!');
-      } else {
-        console.log('Camera cancelled');
-      }
-    } catch (error) {
-      console.error('❌ Error taking photo:', error);
-      Alert.alert('Error', `Failed to take photo: ${error.message}`);
-    }
-  };
-
-  // FIXED: Show image picker options
-  const showImagePicker = () => {
-    console.log('🖼️ showImagePicker called');
-    
-    Alert.alert(
-      'Profile Photo',
-      'Choose an option',
-      [
-        { 
-          text: 'Take Photo', 
-          onPress: () => {
-            console.log('User selected: Take Photo');
-            takeProfilePhoto();
-          }
-        },
-        { 
-          text: 'Choose from Gallery', 
-          onPress: () => {
-            console.log('User selected: Choose from Gallery');
-            pickFromGallery();
-          }
-        },
-        { 
-          text: 'Cancel', 
-          style: 'cancel',
-          onPress: () => console.log('User cancelled')
-        }
-      ]
-    );
-  };
-
-  // FIXED: Remove profile image
-  const removeProfileImage = () => {
-    console.log('🗑️ Removing profile image');
-    setProfileImage(null);
-    Alert.alert('Success', 'Profile photo removed');
-  };
 
   const handleSubmit = async () => {
     // Clear previous main error
@@ -295,10 +163,9 @@ export default function LoginScreen({ theme }) {
     try {
       console.log('🔐 Attempting authentication...');
       console.log('Mode:', isSignup ? 'Signup' : 'Login');
-      console.log('Has profile image:', !!profileImage);
       
       const result = isSignup 
-        ? await signup(email.trim(), password, profileImage)
+        ? await signup(email.trim(), password)
         : await login(email.trim(), password);
 
       console.log('Auth result:', result);
@@ -350,18 +217,10 @@ export default function LoginScreen({ theme }) {
     setIsSignup(!isSignup);
     setPassword('');
     setConfirmPassword('');
-    setProfileImage(null);
     setEmailError('');
     setPasswordError('');
     setConfirmPasswordError('');
     setMainError('');
-  };
-
-  const getUserInitials = () => {
-    if (email) {
-      return email.substring(0, 2).toUpperCase();
-    }
-    return 'U';
   };
 
   return (
@@ -392,51 +251,6 @@ export default function LoginScreen({ theme }) {
               <Text style={styles.mainErrorText}>{mainError}</Text>
             </View>
           ) : null}
-
-          {/* FIXED: Profile Image Section (Signup only) */}
-          {isSignup && (
-            <View style={styles.profileImageSection}>
-              <Text style={[styles.profileImageLabel, { color: theme.text }]}>
-                Profile Photo (Optional)
-              </Text>
-              
-              <TouchableOpacity 
-                style={styles.profileImageContainer}
-                onPress={showImagePicker}
-                activeOpacity={0.7}
-              >
-                {profileImage ? (
-                  <View style={styles.imageWrapper}>
-                    <Image 
-                      source={{ uri: profileImage.uri }} 
-                      style={styles.profileImage}
-                    />
-                    <TouchableOpacity 
-                      style={styles.removeImageButton}
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        removeProfileImage();
-                      }}
-                    >
-                      <Text style={styles.removeImageText}>✕</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <View style={styles.profileImagePlaceholder}>
-                    <Text style={styles.profileImageIcon}>📷</Text>
-                    <Text style={styles.profileImageText}>Add Photo</Text>
-                    <Text style={styles.profileImageHint}>Tap to select</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-              
-              {!profileImage && (
-                <Text style={[styles.profileImageDesc, { color: theme.textMuted }]}>
-                  Choose a profile photo from your gallery or take a new one
-                </Text>
-              )}
-            </View>
-          )}
 
           {/* Form */}
           <View style={styles.form}>
@@ -678,76 +492,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#DC2626',
     fontWeight: '600',
-  },
-  profileImageSection: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  profileImageLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  profileImageContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    overflow: 'hidden',
-    marginBottom: 8,
-  },
-  imageWrapper: {
-    width: '100%',
-    height: '100%',
-    position: 'relative',
-  },
-  profileImage: {
-    width: '100%',
-    height: '100%',
-  },
-  removeImageButton: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#DC2626',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  removeImageText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  profileImagePlaceholder: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#E5E7EB',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#D1D5DB',
-    borderStyle: 'dashed',
-  },
-  profileImageIcon: {
-    fontSize: 40,
-    marginBottom: 4,
-  },
-  profileImageText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-  profileImageHint: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    marginTop: 2,
-  },
-  profileImageDesc: {
-    fontSize: 12,
-    textAlign: 'center',
-    maxWidth: 280,
   },
   form: {
     marginBottom: 24,
