@@ -1,4 +1,4 @@
-rootProject.name = 'AI Food Tracker'
+rootProject.name = 'Mint'
 
 dependencyResolutionManagement {
   versionCatalogs {

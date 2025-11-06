@@ -1,4 +1,4 @@
-package com.yourcompany.aifoodtracker
+package com.mint.foodtracker
 
 import android.os.Build
 import android.os.Bundle

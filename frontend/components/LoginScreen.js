@@ -165,7 +165,6 @@ export default function LoginScreen({ theme }) {
         ? await signup(email.trim(), password)
         : await login(email.trim(), password);
 
-      console.log('Auth result:', result);
 
       if (!result.success) {
         const errorMessage = getErrorMessage(result.error);

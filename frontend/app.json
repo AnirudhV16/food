@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Mint",
-    "slug": "mint-food-tracker",
+    "slug": "Mint",
     "owner": "aavv4",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -77,7 +77,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "e5c479f9-c946-4587-a430-3a862c393621"
+        "projectId": "78700775-d617-4109-9701-30007c837ab2"
       }
     }
   }
