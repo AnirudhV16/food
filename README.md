@@ -89,13 +89,7 @@ This isn't just an app—it's a solution to **reduce food waste, save money, and
 
 ---
 
-## 🎥 Demo Video
-
-<p align="center">
-  <video width="600" controls>
-    <source src="https://github.com/user-attachments/assets/6d8d2d6d-ec54-4856-9bf3-e43c8e8538af" type="video/mp4">
-  </video>
-</p>
+[🎥 Demo Video ](https://github.com/user-attachments/assets/6d8d2d6d-ec54-4856-9bf3-e43c8e8538af)
 
 ---
 
@@ -107,7 +101,7 @@ This isn't just an app—it's a solution to **reduce food waste, save money, and
 ⚠️ **Note:** Web notifications have limited browser support and may not work fully. For the complete experience with push notifications, please use the Android APK.
 
 ### 📲 Android APK (Full Features)
-**[Download APK](https://github.com/AnirudhV16/Mint/releases/download/app.apk)**
+**[Download APK](https://github.com/AnirudhV16/Mint/raw/main/releases/app.apk)**
 
 Install the APK on your Android device for the full experience including push notifications.
 
@@ -436,8 +430,7 @@ const firebaseConfig = {
 
 ## 📧 Contact
 
-Anirudh V 
-📧 vennapusaani1629@gmail.com
+**Anirudh V** - [Vennapusaani1629@gmail.com](mailto:Vennapusaani1629@gmail.com)
 
 ---
 
@@ -450,3 +443,5 @@ Anirudh V
 <p align="center">
   <sub>© 2025 Mint. All rights reserved.</sub>
 </p>
+
+
