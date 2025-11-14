@@ -129,7 +129,7 @@ router.post('/details', async (req, res) => {
     console.log(' Getting recipe details for:', recipeName);
 
     // FASTEST: gemini-2.0-flash-exp (2-3x faster than gemini-2.5-pro)
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
     
     const prompt = `Create a detailed recipe for "${recipeName}" using these ingredients: ${ingredientList}
 
